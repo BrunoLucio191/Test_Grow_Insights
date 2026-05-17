@@ -138,6 +138,8 @@ function Dashboard() {
               onRangeChange={setRange}
               onSync={onSync}
               syncing={syncing}
+              syncProgress={syncProgress}
+              cacheStatus={cacheStatus ?? null}
             />
             <div className="px-6 py-6">
               <Tabs defaultValue="paid" className="space-y-6">
