@@ -489,12 +489,21 @@ async function syncScope(
     .eq("id", clientId)
     .single();
   if (!c) throw new Error("Cliente não encontrado");
+  const row = c as ClientRow;
   if (scope === "paid") {
-    const paid = await fetchMetaAdsReal(c as ClientRow, range);
-    await writeCache(clientId, "paid", range, paid);
+    if (isPlaceholder(row.meta_ad_account_id)) {
+      await writeCache(clientId, "paid", range, EMPTY_PAID);
+    } else {
+      const paid = await fetchMetaAdsReal(row, range);
+      await writeCache(clientId, "paid", range, paid);
+    }
   } else {
-    const organic = await fetchOrganicReal(c as ClientRow, range);
-    await writeCache(clientId, "organic", range, organic);
+    if (isPlaceholder(row.meta_page_id) && isPlaceholder(row.ig_account_id)) {
+      await writeCache(clientId, "organic", range, EMPTY_ORGANIC);
+    } else {
+      const organic = await fetchOrganicReal(row, range);
+      await writeCache(clientId, "organic", range, organic);
+    }
   }
   return new Date().toISOString();
 }
