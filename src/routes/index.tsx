@@ -39,6 +39,7 @@ function defaultRange(): DateRange {
 function Dashboard() {
   const qc = useQueryClient();
   const fn = useServerFn(listClients);
+  const syncFn = useServerFn(syncClient);
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: () => fn(),
@@ -57,12 +58,18 @@ function Dashboard() {
   const onSync = async () => {
     if (!selectedId) return;
     setSyncing(true);
-    await qc.invalidateQueries({ queryKey: ["paid", selectedId] });
-    await qc.invalidateQueries({ queryKey: ["organic", selectedId] });
-    setTimeout(() => {
+    try {
+      await syncFn({ data: { clientId: selectedId, range } });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["paid", selectedId] }),
+        qc.invalidateQueries({ queryKey: ["organic", selectedId] }),
+      ]);
+      toast.success("Dados sincronizados com a Meta");
+    } catch (e: any) {
+      toast.error(`Falha na sincronização: ${e?.message ?? "erro desconhecido"}`);
+    } finally {
       setSyncing(false);
-      toast.success("Dados sincronizados");
-    }, 600);
+    }
   };
 
   return (
