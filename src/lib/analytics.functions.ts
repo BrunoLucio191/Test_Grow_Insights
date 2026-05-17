@@ -417,6 +417,11 @@ export const fetchOrganicData = createServerFn({ method: "POST" })
       .eq("id", data.clientId)
       .single();
     if (!client) throw new Error("Cliente não encontrado");
+    const c = client as ClientRow;
+    if (isPlaceholder(c.meta_page_id) && isPlaceholder(c.ig_account_id)) {
+      console.warn(`[organic] cliente "${c.name}" sem meta_page_id/ig_account_id reais (placeholder).`);
+      return EMPTY_ORGANIC;
+    }
 
     try {
       const fresh = await fetchOrganicReal(client as ClientRow, data.range);
