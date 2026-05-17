@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listClients } from "@/lib/analytics.functions";
+import { listClients, syncClient } from "@/lib/analytics.functions";
 import { ClientSidebar } from "@/components/begrow/ClientSidebar";
 import { DashboardHeader } from "@/components/begrow/DashboardHeader";
 import { PaidTab } from "@/components/begrow/PaidTab";
