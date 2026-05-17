@@ -57,11 +57,12 @@ export type ClientRow = {
   ig_account_id: string | null;
 };
 
-// Detect seed/placeholder IDs (e.g. "act_000000001", "0001"). Client-safe.
-const PLACEHOLDER_RE = /^(act_)?0+\d{0,3}$/;
+// Detect seed/placeholder IDs used in local/demo clients so we don't hit Meta with fake IDs.
+const PLACEHOLDER_RE = /^(?:act_0{6,}\d{1,3}|0+\d{0,3}|10{6,}\d{1,3}|170{6,}\d{1,3})$/;
 export function isPlaceholderId(id: string | null | undefined): boolean {
   if (!id || !id.trim()) return true;
-  return PLACEHOLDER_RE.test(id.trim());
+  const value = id.trim();
+  return PLACEHOLDER_RE.test(value);
 }
 
 export type ClientValidation = {
