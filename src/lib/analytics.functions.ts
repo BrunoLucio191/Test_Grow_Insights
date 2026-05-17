@@ -10,6 +10,7 @@ import type {
   TimeSeriesPoint,
   TopPost,
 } from "./analytics-types";
+import { isPlaceholderId } from "./analytics-types";
 
 const dateRangeSchema = z.object({
   from: z.string(),
@@ -29,11 +30,8 @@ const CACHE_TTL_SECONDS = 60 * 60; // 1 hour
 
 const GRAPH_API = "https://graph.facebook.com/v19.0";
 
-// Treat seed/placeholder IDs as "not configured" so we don't hammer the Meta API.
-const PLACEHOLDER_RE = /^(act_)?0+\d{0,3}$/;
 function isPlaceholder(id: string | null | undefined): boolean {
-  if (!id) return true;
-  return PLACEHOLDER_RE.test(id);
+  return isPlaceholderId(id);
 }
 
 const EMPTY_PAID: PaidData = {
