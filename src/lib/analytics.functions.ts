@@ -2,7 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { mockPaid, mockOrganic } from "./analytics-mocks";
-import type { ClientRow, PaidData, OrganicData } from "./analytics-types";
+import type {
+  ClientRow,
+  PaidData,
+  OrganicData,
+  Campaign,
+  TimeSeriesPoint,
+  TopPost,
+} from "./analytics-types";
 
 const dateRangeSchema = z.object({
   from: z.string(),
@@ -14,9 +21,13 @@ const clientRangeSchema = z.object({
   range: dateRangeSchema,
 });
 
-// USE_MOCKS controls whether we hit Meta Graph API or return synthetic data.
-// Toggle to "false" in env once META_ACCESS_TOKEN is added and Meta integration is wired.
-const USE_MOCKS = (process.env.USE_MOCKS ?? "true") !== "false";
+// Default: use real Meta API. Set USE_MOCKS=true to force synthetic data.
+const USE_MOCKS = (process.env.USE_MOCKS ?? "false") === "true";
+
+// Cache TTL: how long a cached response is considered fresh (seconds).
+const CACHE_TTL_SECONDS = 60 * 60; // 1 hour
+
+const GRAPH_API = "https://graph.facebook.com/v19.0";
 
 /* -------------------- Clients -------------------- */
 
@@ -34,50 +45,409 @@ export const listClients = createServerFn({ method: "GET" }).handler(
   },
 );
 
-/* -------------------- Meta Ads (Paid) -------------------- */
+/* -------------------- Cache helpers -------------------- */
 
-async function fetchMetaAdsReal(client: ClientRow, range: { from: string; to: string }): Promise<PaidData> {
-  const token = process.env.META_ACCESS_TOKEN;
-  if (!token || !client.meta_ad_account_id) {
-    throw new Error("Missing META_ACCESS_TOKEN or meta_ad_account_id");
+type Scope = "paid" | "organic";
+
+async function readCache<T>(
+  clientId: string,
+  scope: Scope,
+  range: { from: string; to: string },
+  force: boolean,
+): Promise<T | null> {
+  if (force) return null;
+  const { data } = await supabaseAdmin
+    .from("meta_cache")
+    .select("payload, fetched_at")
+    .eq("client_id", clientId)
+    .eq("scope", scope)
+    .eq("range_from", range.from)
+    .eq("range_to", range.to)
+    .maybeSingle();
+  if (!data) return null;
+  const ageSec = (Date.now() - new Date(data.fetched_at).getTime()) / 1000;
+  if (ageSec > CACHE_TTL_SECONDS) return null;
+  return data.payload as T;
+}
+
+async function writeCache(
+  clientId: string,
+  scope: Scope,
+  range: { from: string; to: string },
+  payload: unknown,
+): Promise<void> {
+  const { error } = await supabaseAdmin.from("meta_cache").upsert(
+    {
+      client_id: clientId,
+      scope,
+      range_from: range.from,
+      range_to: range.to,
+      payload,
+      fetched_at: new Date().toISOString(),
+    },
+    { onConflict: "client_id,scope,range_from,range_to" },
+  );
+  if (error) console.error("writeCache error:", error);
+}
+
+async function invalidateCache(clientId: string, scope?: Scope) {
+  let q = supabaseAdmin.from("meta_cache").delete().eq("client_id", clientId);
+  if (scope) q = q.eq("scope", scope);
+  const { error } = await q;
+  if (error) console.error("invalidateCache error:", error);
+}
+
+/* -------------------- Meta Graph helpers -------------------- */
+
+async function graphGet<T = any>(
+  path: string,
+  params: Record<string, string>,
+  token: string,
+): Promise<T> {
+  const url = new URL(`${GRAPH_API}${path}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  url.searchParams.set("access_token", token);
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Meta API ${res.status}: ${body.slice(0, 300)}`);
   }
-  // Skeleton — implement Meta Graph API call here.
-  // const url = `https://graph.facebook.com/v19.0/${client.meta_ad_account_id}/insights?...`;
-  throw new Error("Meta Ads integration not yet implemented. Set USE_MOCKS=true.");
+  return res.json() as Promise<T>;
+}
+
+function sumAction(actions: Array<{ action_type: string; value: string }> | undefined, types: string[]): number {
+  if (!actions) return 0;
+  return actions
+    .filter((a) => types.includes(a.action_type))
+    .reduce((s, a) => s + Number(a.value || 0), 0);
+}
+
+/* -------------------- Paid (Meta Ads) -------------------- */
+
+async function fetchMetaAdsReal(
+  client: ClientRow,
+  range: { from: string; to: string },
+): Promise<PaidData> {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error("META_ACCESS_TOKEN not set");
+  if (!client.meta_ad_account_id) {
+    throw new Error(`Cliente "${client.name}" sem meta_ad_account_id`);
+  }
+  const account = client.meta_ad_account_id.startsWith("act_")
+    ? client.meta_ad_account_id
+    : `act_${client.meta_ad_account_id}`;
+
+  const timeRange = JSON.stringify({ since: range.from, until: range.to });
+
+  // 1. Account-level daily timeseries
+  const daily = await graphGet<{ data: any[] }>(
+    `/${account}/insights`,
+    {
+      time_range: timeRange,
+      time_increment: "1",
+      fields: "spend,impressions,clicks,ctr,cpm,actions,action_values",
+      level: "account",
+    },
+    token,
+  );
+
+  const timeseries: TimeSeriesPoint[] = daily.data.map((d: any) => {
+    const spend = Number(d.spend || 0);
+    const revenue = sumAction(d.action_values, ["purchase", "omni_purchase"]);
+    return {
+      date: d.date_start,
+      spend,
+      roas: spend > 0 ? +(revenue / spend).toFixed(2) : 0,
+    };
+  });
+
+  // 2. Aggregate KPIs for the whole period
+  const totals = await graphGet<{ data: any[] }>(
+    `/${account}/insights`,
+    {
+      time_range: timeRange,
+      fields: "spend,impressions,clicks,ctr,cpm,actions,action_values",
+      level: "account",
+    },
+    token,
+  );
+  const t = totals.data[0] ?? {};
+  const spend = Number(t.spend || 0);
+  const revenue = sumAction(t.action_values, ["purchase", "omni_purchase"]);
+  const conversions = sumAction(t.actions, ["purchase", "omni_purchase", "lead", "complete_registration"]);
+
+  // 3. Campaign breakdown
+  const camps = await graphGet<{ data: any[] }>(
+    `/${account}/insights`,
+    {
+      time_range: timeRange,
+      fields: "campaign_id,campaign_name,spend,actions,objective",
+      level: "campaign",
+      limit: "50",
+    },
+    token,
+  );
+  const campMeta = await graphGet<{ data: any[] }>(
+    `/${account}/campaigns`,
+    { fields: "id,name,status,daily_budget,lifetime_budget,objective", limit: "50" },
+    token,
+  );
+  const statusById = new Map(campMeta.data.map((c) => [c.id, c]));
+
+  const campaigns: Campaign[] = camps.data.map((c: any) => {
+    const meta = statusById.get(c.campaign_id) ?? {};
+    const budget = Number(meta.daily_budget || meta.lifetime_budget || 0) / 100;
+    return {
+      id: c.campaign_id,
+      name: c.campaign_name,
+      status: (meta.status as Campaign["status"]) ?? "ACTIVE",
+      budget,
+      spent: Number(c.spend || 0),
+      results: sumAction(c.actions, ["purchase", "omni_purchase", "lead", "complete_registration"]),
+      objective: c.objective ?? meta.objective ?? "—",
+    };
+  });
+
+  return {
+    kpis: {
+      spend,
+      roas: spend > 0 ? +(revenue / spend).toFixed(2) : 0,
+      cpa: conversions > 0 ? +(spend / conversions).toFixed(2) : 0,
+      ctr: Number(t.ctr || 0),
+      cpm: Number(t.cpm || 0),
+    },
+    timeseries,
+    campaigns,
+  };
 }
 
 export const fetchMetaAdsData = createServerFn({ method: "POST" })
   .inputValidator((d) => clientRangeSchema.parse(d))
   .handler(async ({ data }): Promise<PaidData> => {
     if (USE_MOCKS) return mockPaid(data.clientId, data.range);
+
+    const cached = await readCache<PaidData>(data.clientId, "paid", data.range, false);
+    if (cached) return cached;
+
     const { data: client } = await supabaseAdmin
       .from("clients")
       .select("*")
       .eq("id", data.clientId)
       .single();
-    if (!client) throw new Error("Client not found");
-    return fetchMetaAdsReal(client as ClientRow, data.range);
+    if (!client) throw new Error("Cliente não encontrado");
+
+    try {
+      const fresh = await fetchMetaAdsReal(client as ClientRow, data.range);
+      await writeCache(data.clientId, "paid", data.range, fresh);
+      return fresh;
+    } catch (e) {
+      console.error("fetchMetaAdsReal failed:", e);
+      // Stale fallback: ignore TTL if upstream failed
+      const stale = await supabaseAdmin
+        .from("meta_cache")
+        .select("payload")
+        .eq("client_id", data.clientId)
+        .eq("scope", "paid")
+        .eq("range_from", data.range.from)
+        .eq("range_to", data.range.to)
+        .maybeSingle();
+      if (stale.data) return stale.data.payload as PaidData;
+      throw e;
+    }
   });
 
 /* -------------------- Organic (FB + IG) -------------------- */
 
-async function fetchOrganicReal(client: ClientRow): Promise<OrganicData> {
+async function fetchOrganicReal(
+  client: ClientRow,
+  range: { from: string; to: string },
+): Promise<OrganicData> {
   const token = process.env.META_ACCESS_TOKEN;
-  if (!token) throw new Error("Missing META_ACCESS_TOKEN");
-  throw new Error("Organic integration not yet implemented. Set USE_MOCKS=true.");
+  if (!token) throw new Error("META_ACCESS_TOKEN not set");
+
+  let reach = 0;
+  let profileVisits = 0;
+  let newFollowers = 0;
+  let engagementSum = 0;
+  let engagementCount = 0;
+  const topPosts: TopPost[] = [];
+
+  // Facebook Page insights
+  if (client.meta_page_id) {
+    try {
+      const fb = await graphGet<{ data: any[] }>(
+        `/${client.meta_page_id}/insights`,
+        {
+          metric: "page_impressions_unique,page_fan_adds,page_views_total,page_post_engagements",
+          since: range.from,
+          until: range.to,
+        },
+        token,
+      );
+      for (const m of fb.data) {
+        const total = (m.values ?? []).reduce((s: number, v: any) => s + Number(v.value || 0), 0);
+        if (m.name === "page_impressions_unique") reach += total;
+        if (m.name === "page_fan_adds") newFollowers += total;
+        if (m.name === "page_views_total") profileVisits += total;
+        if (m.name === "page_post_engagements") {
+          engagementSum += total;
+          engagementCount += 1;
+        }
+      }
+      // FB top posts
+      const posts = await graphGet<{ data: any[] }>(
+        `/${client.meta_page_id}/posts`,
+        {
+          fields: "id,message,full_picture,created_time,likes.summary(true),comments.summary(true),insights.metric(post_impressions_unique)",
+          since: range.from,
+          until: range.to,
+          limit: "10",
+        },
+        token,
+      );
+      for (const p of posts.data ?? []) {
+        topPosts.push({
+          id: p.id,
+          platform: "facebook",
+          caption: p.message ?? "",
+          thumbnail: p.full_picture ?? "",
+          likes: p.likes?.summary?.total_count ?? 0,
+          comments: p.comments?.summary?.total_count ?? 0,
+          reach: p.insights?.data?.[0]?.values?.[0]?.value ?? 0,
+          postedAt: p.created_time,
+        });
+      }
+    } catch (e) {
+      console.error("FB organic fetch failed:", e);
+    }
+  }
+
+  // Instagram insights
+  if (client.ig_account_id) {
+    try {
+      const ig = await graphGet<{ data: any[] }>(
+        `/${client.ig_account_id}/insights`,
+        {
+          metric: "reach,profile_views,follower_count",
+          period: "day",
+          since: range.from,
+          until: range.to,
+        },
+        token,
+      );
+      for (const m of ig.data) {
+        const total = (m.values ?? []).reduce((s: number, v: any) => s + Number(v.value || 0), 0);
+        if (m.name === "reach") reach += total;
+        if (m.name === "profile_views") profileVisits += total;
+        if (m.name === "follower_count") newFollowers += total;
+      }
+      // IG top media
+      const media = await graphGet<{ data: any[] }>(
+        `/${client.ig_account_id}/media`,
+        {
+          fields: "id,caption,media_url,thumbnail_url,like_count,comments_count,timestamp,insights.metric(reach)",
+          limit: "10",
+        },
+        token,
+      );
+      for (const p of media.data ?? []) {
+        const ts = p.timestamp ?? "";
+        if (ts && (ts.slice(0, 10) < range.from || ts.slice(0, 10) > range.to)) continue;
+        topPosts.push({
+          id: p.id,
+          platform: "instagram",
+          caption: p.caption ?? "",
+          thumbnail: p.thumbnail_url ?? p.media_url ?? "",
+          likes: p.like_count ?? 0,
+          comments: p.comments_count ?? 0,
+          reach: p.insights?.data?.[0]?.values?.[0]?.value ?? 0,
+          postedAt: ts,
+        });
+      }
+    } catch (e) {
+      console.error("IG organic fetch failed:", e);
+    }
+  }
+
+  topPosts.sort((a, b) => b.reach - a.reach);
+
+  return {
+    kpis: {
+      newFollowers,
+      reach,
+      avgEngagement: engagementCount > 0 ? Math.round(engagementSum / engagementCount) : 0,
+      profileVisits,
+    },
+    topPosts: topPosts.slice(0, 8),
+  };
 }
 
 export const fetchOrganicData = createServerFn({ method: "POST" })
   .inputValidator((d) => clientRangeSchema.parse(d))
   .handler(async ({ data }): Promise<OrganicData> => {
     if (USE_MOCKS) return mockOrganic(data.clientId, data.range);
+
+    const cached = await readCache<OrganicData>(data.clientId, "organic", data.range, false);
+    if (cached) return cached;
+
     const { data: client } = await supabaseAdmin
       .from("clients")
       .select("*")
       .eq("id", data.clientId)
       .single();
-    if (!client) throw new Error("Client not found");
-    return fetchOrganicReal(client as ClientRow);
+    if (!client) throw new Error("Cliente não encontrado");
+
+    try {
+      const fresh = await fetchOrganicReal(client as ClientRow, data.range);
+      await writeCache(data.clientId, "organic", data.range, fresh);
+      return fresh;
+    } catch (e) {
+      console.error("fetchOrganicReal failed:", e);
+      const stale = await supabaseAdmin
+        .from("meta_cache")
+        .select("payload")
+        .eq("client_id", data.clientId)
+        .eq("scope", "organic")
+        .eq("range_from", data.range.from)
+        .eq("range_to", data.range.to)
+        .maybeSingle();
+      if (stale.data) return stale.data.payload as OrganicData;
+      throw e;
+    }
+  });
+
+/* -------------------- Sync (invalidate + refetch) -------------------- */
+
+export const syncClient = createServerFn({ method: "POST" })
+  .inputValidator((d) => clientRangeSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true; cachedAt: string }> => {
+    await invalidateCache(data.clientId);
+    // Pre-warm both scopes in parallel; ignore individual errors so UI re-queries handle them.
+    await Promise.allSettled([
+      (async () => {
+        if (USE_MOCKS) return;
+        const { data: c } = await supabaseAdmin
+          .from("clients")
+          .select("*")
+          .eq("id", data.clientId)
+          .single();
+        if (!c) return;
+        const paid = await fetchMetaAdsReal(c as ClientRow, data.range);
+        await writeCache(data.clientId, "paid", data.range, paid);
+      })(),
+      (async () => {
+        if (USE_MOCKS) return;
+        const { data: c } = await supabaseAdmin
+          .from("clients")
+          .select("*")
+          .eq("id", data.clientId)
+          .single();
+        if (!c) return;
+        const organic = await fetchOrganicReal(c as ClientRow, data.range);
+        await writeCache(data.clientId, "organic", data.range, organic);
+      })(),
+    ]);
+    return { ok: true, cachedAt: new Date().toISOString() };
   });
 
 /* -------------------- AI Optimizer -------------------- */
