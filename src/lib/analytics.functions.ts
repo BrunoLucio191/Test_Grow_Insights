@@ -82,7 +82,7 @@ async function writeCache(
       scope,
       range_from: range.from,
       range_to: range.to,
-      payload,
+      payload: payload as any,
       fetched_at: new Date().toISOString(),
     },
     { onConflict: "client_id,scope,range_from,range_to" },
