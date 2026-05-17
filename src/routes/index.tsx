@@ -56,6 +56,7 @@ function Dashboard() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [range, setRange] = useState<DateRange>(defaultRange());
   const [syncing, setSyncing] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({
     paid: "idle",
     organic: "idle",
