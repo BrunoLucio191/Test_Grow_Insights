@@ -105,10 +105,11 @@ function CacheLine({
 }
 
 export function DashboardHeader({
-  clientName,
+  client,
   range,
   onRangeChange,
   onSync,
+  onOpenSettings,
   syncing,
   syncProgress,
   cacheStatus,
@@ -117,6 +118,7 @@ export function DashboardHeader({
   const [now, setNow] = useState(() => Date.now());
   const from = new Date(range.from);
   const to = new Date(range.to);
+  const validation = validateClient(client);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -126,16 +128,24 @@ export function DashboardHeader({
   return (
     <header className="flex flex-col gap-4 border-b border-border/60 bg-background/60 px-6 py-5 backdrop-blur">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Cliente ativo
           </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-            {clientName}
+          <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
+            {client.name}
+            {!validation.anyOk && (
+              <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-400">
+                <AlertTriangle className="h-3 w-3" /> IDs incompletos
+              </span>
+            )}
           </h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="icon" onClick={onOpenSettings} title="Configurar IDs">
+            <Settings className="h-4 w-4" />
+          </Button>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className={cn("justify-start gap-2 font-normal")}>
