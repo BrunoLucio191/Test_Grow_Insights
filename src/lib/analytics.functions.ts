@@ -567,7 +567,13 @@ const updateClientSchema = z.object({
 export const updateClient = createServerFn({ method: "POST" })
   .inputValidator((d) => updateClientSchema.parse(d))
   .handler(async ({ data }): Promise<ClientRow> => {
-    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const patch: {
+      name?: string;
+      meta_ad_account_id?: string | null;
+      meta_page_id?: string | null;
+      ig_account_id?: string | null;
+      updated_at: string;
+    } = { updated_at: new Date().toISOString() };
     if (data.name !== undefined) patch.name = data.name;
     if (data.meta_ad_account_id !== undefined)
       patch.meta_ad_account_id = data.meta_ad_account_id || null;
