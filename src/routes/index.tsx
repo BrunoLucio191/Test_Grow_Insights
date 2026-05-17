@@ -77,29 +77,49 @@ function Dashboard() {
   });
 
   const onSync = async () => {
-    if (!selectedId) return;
+    if (!selectedId || !selected) return;
+    const v = validateClient(selected);
+    if (!v.anyOk) {
+      toast.error("IDs incompletos. Configure os IDs Meta antes de sincronizar.", {
+        action: { label: "Configurar", onClick: () => setSettingsOpen(true) },
+      });
+      return;
+    }
+    if (!v.paidOk || !v.organicOk) {
+      toast.warning(
+        `Faltando: ${v.missing.join(", ")} — sincronizando apenas os escopos disponíveis.`,
+      );
+    }
+
     setSyncing(true);
-    setSyncProgress({ paid: "running", organic: "running" });
+    setSyncProgress({
+      paid: v.paidOk ? "running" : "idle",
+      organic: v.organicOk ? "running" : "idle",
+    });
 
-    const runPaid = syncPaidFn({ data: { clientId: selectedId, range } })
-      .then(() => {
-        setSyncProgress((p) => ({ ...p, paid: "done" }));
-        qc.invalidateQueries({ queryKey: ["paid", selectedId] });
-      })
-      .catch((e: any) => {
-        setSyncProgress((p) => ({ ...p, paid: "error" }));
-        toast.error(`Pago: ${e?.message ?? "erro"}`);
-      });
+    const runPaid = v.paidOk
+      ? syncPaidFn({ data: { clientId: selectedId, range } })
+          .then(() => {
+            setSyncProgress((p) => ({ ...p, paid: "done" }));
+            qc.invalidateQueries({ queryKey: ["paid", selectedId] });
+          })
+          .catch((e: any) => {
+            setSyncProgress((p) => ({ ...p, paid: "error" }));
+            toast.error(`Pago: ${e?.message ?? "erro"}`);
+          })
+      : Promise.resolve();
 
-    const runOrganic = syncOrganicFn({ data: { clientId: selectedId, range } })
-      .then(() => {
-        setSyncProgress((p) => ({ ...p, organic: "done" }));
-        qc.invalidateQueries({ queryKey: ["organic", selectedId] });
-      })
-      .catch((e: any) => {
-        setSyncProgress((p) => ({ ...p, organic: "error" }));
-        toast.error(`Orgânico: ${e?.message ?? "erro"}`);
-      });
+    const runOrganic = v.organicOk
+      ? syncOrganicFn({ data: { clientId: selectedId, range } })
+          .then(() => {
+            setSyncProgress((p) => ({ ...p, organic: "done" }));
+            qc.invalidateQueries({ queryKey: ["organic", selectedId] });
+          })
+          .catch((e: any) => {
+            setSyncProgress((p) => ({ ...p, organic: "error" }));
+            toast.error(`Orgânico: ${e?.message ?? "erro"}`);
+          })
+      : Promise.resolve();
 
     await Promise.allSettled([runPaid, runOrganic]);
     await qc.invalidateQueries({
@@ -135,13 +155,19 @@ function Dashboard() {
         ) : (
           <>
             <DashboardHeader
-              clientName={selected.name}
+              client={selected}
               range={range}
               onRangeChange={setRange}
               onSync={onSync}
+              onOpenSettings={() => setSettingsOpen(true)}
               syncing={syncing}
               syncProgress={syncProgress}
               cacheStatus={cacheStatus ?? null}
+            />
+            <ClientSettingsDialog
+              client={selected}
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
             />
             <div className="px-6 py-6">
               <Tabs defaultValue="paid" className="space-y-6">
