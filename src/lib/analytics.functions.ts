@@ -252,6 +252,10 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
       .eq("id", data.clientId)
       .single();
     if (!client) throw new Error("Cliente não encontrado");
+    if (isPlaceholder((client as ClientRow).meta_ad_account_id)) {
+      console.warn(`[paid] cliente "${(client as ClientRow).name}" sem meta_ad_account_id real (placeholder).`);
+      return EMPTY_PAID;
+    }
 
     try {
       const fresh = await fetchMetaAdsReal(client as ClientRow, data.range);
