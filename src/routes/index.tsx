@@ -5,9 +5,14 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listClients, syncClient } from "@/lib/analytics.functions";
+import {
+  listClients,
+  syncPaid,
+  syncOrganic,
+  getCacheStatus,
+} from "@/lib/analytics.functions";
 import { ClientSidebar } from "@/components/begrow/ClientSidebar";
-import { DashboardHeader } from "@/components/begrow/DashboardHeader";
+import { DashboardHeader, type SyncProgress } from "@/components/begrow/DashboardHeader";
 import { PaidTab } from "@/components/begrow/PaidTab";
 import { OrganicTab } from "@/components/begrow/OrganicTab";
 import { AiTab } from "@/components/begrow/AiTab";
@@ -39,7 +44,9 @@ function defaultRange(): DateRange {
 function Dashboard() {
   const qc = useQueryClient();
   const fn = useServerFn(listClients);
-  const syncFn = useServerFn(syncClient);
+  const syncPaidFn = useServerFn(syncPaid);
+  const syncOrganicFn = useServerFn(syncOrganic);
+  const cacheStatusFn = useServerFn(getCacheStatus);
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: () => fn(),
@@ -48,6 +55,10 @@ function Dashboard() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [range, setRange] = useState<DateRange>(defaultRange());
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress>({
+    paid: "idle",
+    organic: "idle",
+  });
 
   useEffect(() => {
     if (clients?.length && !selectedId) setSelectedId(clients[0].id);
@@ -55,21 +66,49 @@ function Dashboard() {
 
   const selected = clients?.find((c) => c.id === selectedId) ?? null;
 
+  const { data: cacheStatus } = useQuery({
+    queryKey: ["cache-status", selectedId, range.from, range.to],
+    queryFn: () =>
+      cacheStatusFn({ data: { clientId: selectedId!, range } }),
+    enabled: !!selectedId,
+    refetchInterval: 60_000,
+  });
+
   const onSync = async () => {
     if (!selectedId) return;
     setSyncing(true);
-    try {
-      await syncFn({ data: { clientId: selectedId, range } });
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["paid", selectedId] }),
-        qc.invalidateQueries({ queryKey: ["organic", selectedId] }),
-      ]);
-      toast.success("Dados sincronizados com a Meta");
-    } catch (e: any) {
-      toast.error(`Falha na sincronização: ${e?.message ?? "erro desconhecido"}`);
-    } finally {
-      setSyncing(false);
-    }
+    setSyncProgress({ paid: "running", organic: "running" });
+
+    const runPaid = syncPaidFn({ data: { clientId: selectedId, range } })
+      .then(() => {
+        setSyncProgress((p) => ({ ...p, paid: "done" }));
+        qc.invalidateQueries({ queryKey: ["paid", selectedId] });
+      })
+      .catch((e: any) => {
+        setSyncProgress((p) => ({ ...p, paid: "error" }));
+        toast.error(`Pago: ${e?.message ?? "erro"}`);
+      });
+
+    const runOrganic = syncOrganicFn({ data: { clientId: selectedId, range } })
+      .then(() => {
+        setSyncProgress((p) => ({ ...p, organic: "done" }));
+        qc.invalidateQueries({ queryKey: ["organic", selectedId] });
+      })
+      .catch((e: any) => {
+        setSyncProgress((p) => ({ ...p, organic: "error" }));
+        toast.error(`Orgânico: ${e?.message ?? "erro"}`);
+      });
+
+    await Promise.allSettled([runPaid, runOrganic]);
+    await qc.invalidateQueries({
+      queryKey: ["cache-status", selectedId, range.from, range.to],
+    });
+    toast.success("Sincronização concluída");
+    setSyncing(false);
+    setTimeout(
+      () => setSyncProgress({ paid: "idle", organic: "idle" }),
+      2500,
+    );
   };
 
   return (
@@ -99,6 +138,8 @@ function Dashboard() {
               onRangeChange={setRange}
               onSync={onSync}
               syncing={syncing}
+              syncProgress={syncProgress}
+              cacheStatus={cacheStatus ?? null}
             />
             <div className="px-6 py-6">
               <Tabs defaultValue="paid" className="space-y-6">

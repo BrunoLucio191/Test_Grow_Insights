@@ -450,6 +450,75 @@ export const syncClient = createServerFn({ method: "POST" })
     return { ok: true, cachedAt: new Date().toISOString() };
   });
 
+async function syncScope(
+  clientId: string,
+  scope: Scope,
+  range: { from: string; to: string },
+): Promise<string> {
+  await invalidateCache(clientId, scope);
+  if (USE_MOCKS) return new Date().toISOString();
+  const { data: c } = await supabaseAdmin
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .single();
+  if (!c) throw new Error("Cliente não encontrado");
+  if (scope === "paid") {
+    const paid = await fetchMetaAdsReal(c as ClientRow, range);
+    await writeCache(clientId, "paid", range, paid);
+  } else {
+    const organic = await fetchOrganicReal(c as ClientRow, range);
+    await writeCache(clientId, "organic", range, organic);
+  }
+  return new Date().toISOString();
+}
+
+export const syncPaid = createServerFn({ method: "POST" })
+  .inputValidator((d) => clientRangeSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true; cachedAt: string }> => {
+    const cachedAt = await syncScope(data.clientId, "paid", data.range);
+    return { ok: true, cachedAt };
+  });
+
+export const syncOrganic = createServerFn({ method: "POST" })
+  .inputValidator((d) => clientRangeSchema.parse(d))
+  .handler(async ({ data }): Promise<{ ok: true; cachedAt: string }> => {
+    const cachedAt = await syncScope(data.clientId, "organic", data.range);
+    return { ok: true, cachedAt };
+  });
+
+export type CacheStatus = {
+  paid: { fetchedAt: string | null; expiresAt: string | null };
+  organic: { fetchedAt: string | null; expiresAt: string | null };
+  ttlSeconds: number;
+};
+
+export const getCacheStatus = createServerFn({ method: "POST" })
+  .inputValidator((d) => clientRangeSchema.parse(d))
+  .handler(async ({ data }): Promise<CacheStatus> => {
+    const { data: rows } = await supabaseAdmin
+      .from("meta_cache")
+      .select("scope, fetched_at")
+      .eq("client_id", data.clientId)
+      .eq("range_from", data.range.from)
+      .eq("range_to", data.range.to);
+
+    const build = (scope: Scope) => {
+      const row = rows?.find((r) => r.scope === scope);
+      if (!row) return { fetchedAt: null, expiresAt: null };
+      const fetchedAt = row.fetched_at;
+      const expiresAt = new Date(
+        new Date(fetchedAt).getTime() + CACHE_TTL_SECONDS * 1000,
+      ).toISOString();
+      return { fetchedAt, expiresAt };
+    };
+    return {
+      paid: build("paid"),
+      organic: build("organic"),
+      ttlSeconds: CACHE_TTL_SECONDS,
+    };
+  });
+
 /* -------------------- AI Optimizer -------------------- */
 
 const insightsSchema = z.object({
