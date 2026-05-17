@@ -5,9 +5,14 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listClients, syncClient } from "@/lib/analytics.functions";
+import {
+  listClients,
+  syncPaid,
+  syncOrganic,
+  getCacheStatus,
+} from "@/lib/analytics.functions";
 import { ClientSidebar } from "@/components/begrow/ClientSidebar";
-import { DashboardHeader } from "@/components/begrow/DashboardHeader";
+import { DashboardHeader, type SyncProgress } from "@/components/begrow/DashboardHeader";
 import { PaidTab } from "@/components/begrow/PaidTab";
 import { OrganicTab } from "@/components/begrow/OrganicTab";
 import { AiTab } from "@/components/begrow/AiTab";
