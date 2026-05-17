@@ -44,6 +44,44 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_cache: {
+        Row: {
+          client_id: string
+          fetched_at: string
+          id: string
+          payload: Json
+          range_from: string
+          range_to: string
+          scope: string
+        }
+        Insert: {
+          client_id: string
+          fetched_at?: string
+          id?: string
+          payload: Json
+          range_from: string
+          range_to: string
+          scope: string
+        }
+        Update: {
+          client_id?: string
+          fetched_at?: string
+          id?: string
+          payload?: Json
+          range_from?: string
+          range_to?: string
+          scope?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_cache_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
