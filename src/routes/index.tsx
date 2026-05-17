@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listClients } from "@/lib/analytics.functions";
+import { listClients, syncClient } from "@/lib/analytics.functions";
 import { ClientSidebar } from "@/components/begrow/ClientSidebar";
 import { DashboardHeader } from "@/components/begrow/DashboardHeader";
 import { PaidTab } from "@/components/begrow/PaidTab";
@@ -39,6 +39,7 @@ function defaultRange(): DateRange {
 function Dashboard() {
   const qc = useQueryClient();
   const fn = useServerFn(listClients);
+  const syncFn = useServerFn(syncClient);
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: () => fn(),
@@ -57,12 +58,18 @@ function Dashboard() {
   const onSync = async () => {
     if (!selectedId) return;
     setSyncing(true);
-    await qc.invalidateQueries({ queryKey: ["paid", selectedId] });
-    await qc.invalidateQueries({ queryKey: ["organic", selectedId] });
-    setTimeout(() => {
+    try {
+      await syncFn({ data: { clientId: selectedId, range } });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["paid", selectedId] }),
+        qc.invalidateQueries({ queryKey: ["organic", selectedId] }),
+      ]);
+      toast.success("Dados sincronizados com a Meta");
+    } catch (e: any) {
+      toast.error(`Falha na sincronização: ${e?.message ?? "erro desconhecido"}`);
+    } finally {
       setSyncing(false);
-      toast.success("Dados sincronizados");
-    }, 600);
+    }
   };
 
   return (
