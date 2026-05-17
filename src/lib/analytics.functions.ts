@@ -29,6 +29,23 @@ const CACHE_TTL_SECONDS = 60 * 60; // 1 hour
 
 const GRAPH_API = "https://graph.facebook.com/v19.0";
 
+// Treat seed/placeholder IDs as "not configured" so we don't hammer the Meta API.
+const PLACEHOLDER_RE = /^(act_)?0+\d{0,3}$/;
+function isPlaceholder(id: string | null | undefined): boolean {
+  if (!id) return true;
+  return PLACEHOLDER_RE.test(id);
+}
+
+const EMPTY_PAID: PaidData = {
+  kpis: { spend: 0, roas: 0, cpa: 0, ctr: 0, cpm: 0 },
+  timeseries: [],
+  campaigns: [],
+};
+const EMPTY_ORGANIC: OrganicData = {
+  kpis: { newFollowers: 0, reach: 0, avgEngagement: 0, profileVisits: 0 },
+  topPosts: [],
+};
+
 /* -------------------- Clients -------------------- */
 
 export const listClients = createServerFn({ method: "GET" }).handler(
