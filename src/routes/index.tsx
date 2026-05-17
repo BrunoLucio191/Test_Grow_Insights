@@ -13,11 +13,12 @@ import {
 } from "@/lib/analytics.functions";
 import { ClientSidebar } from "@/components/begrow/ClientSidebar";
 import { DashboardHeader, type SyncProgress } from "@/components/begrow/DashboardHeader";
+import { ClientSettingsDialog } from "@/components/begrow/ClientSettingsDialog";
 import { PaidTab } from "@/components/begrow/PaidTab";
 import { OrganicTab } from "@/components/begrow/OrganicTab";
 import { AiTab } from "@/components/begrow/AiTab";
 import { Toaster } from "@/components/ui/sonner";
-import type { DateRange } from "@/lib/analytics-types";
+import { validateClient, type DateRange } from "@/lib/analytics-types";
 import { TrendingUp, Radio, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/")({
