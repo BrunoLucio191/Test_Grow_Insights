@@ -612,7 +612,11 @@ async function probe(
     const r = await fn();
     return { ok: true, label, detail: r.detail };
   } catch (e: any) {
-    return { ok: false, label, error: e?.message ?? String(e) };
+    const message = e?.message ?? String(e);
+    const friendly = message.includes("Unsupported get request")
+      ? "ID não encontrado na Meta ou sem permissão para o token atual. Verifique se o ID é real e se o token tem acesso ao ativo."
+      : message;
+    return { ok: false, label, error: friendly };
   }
 }
 
@@ -639,7 +643,7 @@ export const testMetaConnection = createServerFn({ method: "POST" })
     }
 
     const paid: ConnectionCheck = isPlaceholder(row.meta_ad_account_id)
-      ? { ok: false, label: "Meta Ads", error: "ID não configurado" }
+      ? { ok: false, label: "Meta Ads", error: "ID de exemplo ou incompleto. Informe o Account ID real." }
       : await probe("Meta Ads", async () => {
           const acc = row.meta_ad_account_id!.startsWith("act_")
             ? row.meta_ad_account_id!
@@ -655,7 +659,7 @@ export const testMetaConnection = createServerFn({ method: "POST" })
         });
 
     const page: ConnectionCheck = isPlaceholder(row.meta_page_id)
-      ? { ok: false, label: "Facebook Page", error: "ID não configurado" }
+      ? { ok: false, label: "Facebook Page", error: "ID de exemplo ou incompleto. Informe o Page ID real." }
       : await probe("Facebook Page", async () => {
           const r = await graphGet<any>(
             `/${row.meta_page_id}`,
@@ -666,7 +670,7 @@ export const testMetaConnection = createServerFn({ method: "POST" })
         });
 
     const instagram: ConnectionCheck = isPlaceholder(row.ig_account_id)
-      ? { ok: false, label: "Instagram", error: "ID não configurado" }
+      ? { ok: false, label: "Instagram", error: "ID de exemplo ou incompleto. Informe o Instagram Account ID real." }
       : await probe("Instagram", async () => {
           const r = await graphGet<any>(
             `/${row.ig_account_id}`,
