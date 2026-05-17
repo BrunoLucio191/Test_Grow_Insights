@@ -14,7 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clients: {
+        Row: {
+          created_at: string
+          id: string
+          ig_account_id: string | null
+          meta_ad_account_id: string | null
+          meta_page_id: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ig_account_id?: string | null
+          meta_ad_account_id?: string | null
+          meta_page_id?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ig_account_id?: string | null
+          meta_ad_account_id?: string | null
+          meta_page_id?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
