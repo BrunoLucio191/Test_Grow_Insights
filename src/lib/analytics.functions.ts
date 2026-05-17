@@ -554,6 +554,135 @@ export const getCacheStatus = createServerFn({ method: "POST" })
     };
   });
 
+/* -------------------- Client admin: update IDs + test connection -------------------- */
+
+const updateClientSchema = z.object({
+  clientId: z.string().uuid(),
+  name: z.string().min(1).max(120).optional(),
+  meta_ad_account_id: z.string().trim().max(60).nullable().optional(),
+  meta_page_id: z.string().trim().max(60).nullable().optional(),
+  ig_account_id: z.string().trim().max(60).nullable().optional(),
+});
+
+export const updateClient = createServerFn({ method: "POST" })
+  .inputValidator((d) => updateClientSchema.parse(d))
+  .handler(async ({ data }): Promise<ClientRow> => {
+    const patch: {
+      name?: string;
+      meta_ad_account_id?: string | null;
+      meta_page_id?: string | null;
+      ig_account_id?: string | null;
+      updated_at: string;
+    } = { updated_at: new Date().toISOString() };
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.meta_ad_account_id !== undefined)
+      patch.meta_ad_account_id = data.meta_ad_account_id || null;
+    if (data.meta_page_id !== undefined)
+      patch.meta_page_id = data.meta_page_id || null;
+    if (data.ig_account_id !== undefined)
+      patch.ig_account_id = data.ig_account_id || null;
+
+    const { data: row, error } = await supabaseAdmin
+      .from("clients")
+      .update(patch)
+      .eq("id", data.clientId)
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id")
+      .single();
+    if (error) throw new Error(error.message);
+    await invalidateCache(data.clientId);
+    return row as ClientRow;
+  });
+
+export type ConnectionCheck = {
+  ok: boolean;
+  label: string;
+  detail?: string;
+  error?: string;
+};
+export type ConnectionTest = {
+  tokenPresent: boolean;
+  paid: ConnectionCheck;
+  page: ConnectionCheck;
+  instagram: ConnectionCheck;
+};
+
+async function probe(
+  label: string,
+  fn: () => Promise<{ detail: string }>,
+): Promise<ConnectionCheck> {
+  try {
+    const r = await fn();
+    return { ok: true, label, detail: r.detail };
+  } catch (e: any) {
+    return { ok: false, label, error: e?.message ?? String(e) };
+  }
+}
+
+export const testMetaConnection = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }): Promise<ConnectionTest> => {
+    const token = process.env.META_ACCESS_TOKEN;
+    const { data: c, error } = await supabaseAdmin
+      .from("clients")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id")
+      .eq("id", data.clientId)
+      .single();
+    if (error || !c) throw new Error("Cliente não encontrado");
+    const row = c as ClientRow;
+
+    if (!token) {
+      const err = { ok: false, error: "META_ACCESS_TOKEN não configurado" } as const;
+      return {
+        tokenPresent: false,
+        paid: { ...err, label: "Meta Ads" },
+        page: { ...err, label: "Facebook Page" },
+        instagram: { ...err, label: "Instagram" },
+      };
+    }
+
+    const paid: ConnectionCheck = isPlaceholder(row.meta_ad_account_id)
+      ? { ok: false, label: "Meta Ads", error: "ID não configurado" }
+      : await probe("Meta Ads", async () => {
+          const acc = row.meta_ad_account_id!.startsWith("act_")
+            ? row.meta_ad_account_id!
+            : `act_${row.meta_ad_account_id}`;
+          const r = await graphGet<any>(
+            `/${acc}`,
+            { fields: "name,account_status,currency,timezone_name" },
+            token,
+          );
+          return {
+            detail: `${r.name} · ${r.currency} · status ${r.account_status} · ${r.timezone_name}`,
+          };
+        });
+
+    const page: ConnectionCheck = isPlaceholder(row.meta_page_id)
+      ? { ok: false, label: "Facebook Page", error: "ID não configurado" }
+      : await probe("Facebook Page", async () => {
+          const r = await graphGet<any>(
+            `/${row.meta_page_id}`,
+            { fields: "name,category,fan_count" },
+            token,
+          );
+          return { detail: `${r.name} · ${r.category ?? "—"} · ${r.fan_count ?? 0} fãs` };
+        });
+
+    const instagram: ConnectionCheck = isPlaceholder(row.ig_account_id)
+      ? { ok: false, label: "Instagram", error: "ID não configurado" }
+      : await probe("Instagram", async () => {
+          const r = await graphGet<any>(
+            `/${row.ig_account_id}`,
+            { fields: "username,followers_count,media_count" },
+            token,
+          );
+          return {
+            detail: `@${r.username} · ${r.followers_count ?? 0} seguidores · ${r.media_count ?? 0} posts`,
+          };
+        });
+
+    return { tokenPresent: true, paid, page, instagram };
+  });
+
 /* -------------------- AI Optimizer -------------------- */
 
 const insightsSchema = z.object({
