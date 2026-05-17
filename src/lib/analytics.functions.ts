@@ -29,6 +29,23 @@ const CACHE_TTL_SECONDS = 60 * 60; // 1 hour
 
 const GRAPH_API = "https://graph.facebook.com/v19.0";
 
+// Treat seed/placeholder IDs as "not configured" so we don't hammer the Meta API.
+const PLACEHOLDER_RE = /^(act_)?0+\d{0,3}$/;
+function isPlaceholder(id: string | null | undefined): boolean {
+  if (!id) return true;
+  return PLACEHOLDER_RE.test(id);
+}
+
+const EMPTY_PAID: PaidData = {
+  kpis: { spend: 0, roas: 0, cpa: 0, ctr: 0, cpm: 0 },
+  timeseries: [],
+  campaigns: [],
+};
+const EMPTY_ORGANIC: OrganicData = {
+  kpis: { newFollowers: 0, reach: 0, avgEngagement: 0, profileVisits: 0 },
+  topPosts: [],
+};
+
 /* -------------------- Clients -------------------- */
 
 export const listClients = createServerFn({ method: "GET" }).handler(
@@ -235,6 +252,10 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
       .eq("id", data.clientId)
       .single();
     if (!client) throw new Error("Cliente não encontrado");
+    if (isPlaceholder((client as ClientRow).meta_ad_account_id)) {
+      console.warn(`[paid] cliente "${(client as ClientRow).name}" sem meta_ad_account_id real (placeholder).`);
+      return EMPTY_PAID;
+    }
 
     try {
       const fresh = await fetchMetaAdsReal(client as ClientRow, data.range);
@@ -396,6 +417,11 @@ export const fetchOrganicData = createServerFn({ method: "POST" })
       .eq("id", data.clientId)
       .single();
     if (!client) throw new Error("Cliente não encontrado");
+    const c = client as ClientRow;
+    if (isPlaceholder(c.meta_page_id) && isPlaceholder(c.ig_account_id)) {
+      console.warn(`[organic] cliente "${c.name}" sem meta_page_id/ig_account_id reais (placeholder).`);
+      return EMPTY_ORGANIC;
+    }
 
     try {
       const fresh = await fetchOrganicReal(client as ClientRow, data.range);
@@ -463,12 +489,21 @@ async function syncScope(
     .eq("id", clientId)
     .single();
   if (!c) throw new Error("Cliente não encontrado");
+  const row = c as ClientRow;
   if (scope === "paid") {
-    const paid = await fetchMetaAdsReal(c as ClientRow, range);
-    await writeCache(clientId, "paid", range, paid);
+    if (isPlaceholder(row.meta_ad_account_id)) {
+      await writeCache(clientId, "paid", range, EMPTY_PAID);
+    } else {
+      const paid = await fetchMetaAdsReal(row, range);
+      await writeCache(clientId, "paid", range, paid);
+    }
   } else {
-    const organic = await fetchOrganicReal(c as ClientRow, range);
-    await writeCache(clientId, "organic", range, organic);
+    if (isPlaceholder(row.meta_page_id) && isPlaceholder(row.ig_account_id)) {
+      await writeCache(clientId, "organic", range, EMPTY_ORGANIC);
+    } else {
+      const organic = await fetchOrganicReal(row, range);
+      await writeCache(clientId, "organic", range, organic);
+    }
   }
   return new Date().toISOString();
 }
