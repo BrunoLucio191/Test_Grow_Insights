@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, RefreshCw, TrendingUp, Radio, Check, Clock } from "lucide-react";
+import { CalendarIcon, RefreshCw, TrendingUp, Radio, Check, Clock, Settings, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import type { DateRange } from "@/lib/analytics-types";
+import { validateClient, type DateRange, type ClientRow } from "@/lib/analytics-types";
 import type { CacheStatus } from "@/lib/analytics.functions";
 
 export type SyncProgress = {
@@ -16,10 +16,11 @@ export type SyncProgress = {
 };
 
 type Props = {
-  clientName: string;
+  client: ClientRow;
   range: DateRange;
   onRangeChange: (r: DateRange) => void;
   onSync: () => void;
+  onOpenSettings: () => void;
   syncing?: boolean;
   syncProgress?: SyncProgress;
   cacheStatus?: CacheStatus | null;
