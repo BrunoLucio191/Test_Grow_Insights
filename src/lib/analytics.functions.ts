@@ -192,11 +192,27 @@ async function graphGet<T = any>(
   return res.json() as Promise<T>;
 }
 
-function sumAction(actions: Array<{ action_type: string; value: string }> | undefined, types: string[]): number {
-  if (!actions) return 0;
-  return actions
-    .filter((a) => types.includes(a.action_type))
-    .reduce((s, a) => s + Number(a.value || 0), 0);
+type MetaAction = { action_type: string; value: string };
+
+/** Extracts numeric value for a specific action_type from a Meta actions/action_values array. */
+function extractMetaActionValue(arr: MetaAction[] | undefined, actionType: string): number {
+  if (!arr) return 0;
+  const hit = arr.find((a) => a.action_type === actionType);
+  return hit ? parseFloat(hit.value) || 0 : 0;
+}
+
+/**
+ * Conversion fallback chain: purchase → lead → link_click.
+ * Returns the action_type that was actually matched (so revenue can use the same key).
+ */
+const CONVERSION_FALLBACK = ["purchase", "lead", "link_click"] as const;
+
+function pickConversionType(actions: MetaAction[] | undefined): string {
+  if (!actions) return "link_click";
+  for (const type of CONVERSION_FALLBACK) {
+    if (actions.some((a) => a.action_type === type)) return type;
+  }
+  return "link_click";
 }
 
 /* -------------------- Paid (Meta Ads) -------------------- */
@@ -216,82 +232,112 @@ async function fetchMetaAdsReal(
 
   const timeRange = JSON.stringify({ since: range.from, until: range.to });
 
-  // 1. Account-level daily timeseries
-  const daily = await graphGet<{ data: any[] }>(
+  // Single insights call: per-campaign per-day rows with raw actions/action_values.
+  const insights = await graphGet<{ data: any[] }>(
     `/${account}/insights`,
     {
       time_range: timeRange,
       time_increment: "1",
-      fields: "spend,impressions,clicks,ctr,cpm,actions,action_values",
-      level: "account",
-    },
-    token,
-  );
-
-  const timeseries: TimeSeriesPoint[] = daily.data.map((d: any) => {
-    const spend = Number(d.spend || 0);
-    const revenue = sumAction(d.action_values, ["purchase", "omni_purchase"]);
-    return {
-      date: d.date_start,
-      spend,
-      roas: spend > 0 ? +(revenue / spend).toFixed(2) : 0,
-    };
-  });
-
-  // 2. Aggregate KPIs for the whole period
-  const totals = await graphGet<{ data: any[] }>(
-    `/${account}/insights`,
-    {
-      time_range: timeRange,
-      fields: "spend,impressions,clicks,ctr,cpm,actions,action_values",
-      level: "account",
-    },
-    token,
-  );
-  const t = totals.data[0] ?? {};
-  const spend = Number(t.spend || 0);
-  const revenue = sumAction(t.action_values, ["purchase", "omni_purchase"]);
-  const conversions = sumAction(t.actions, ["purchase", "omni_purchase", "lead", "complete_registration"]);
-
-  // 3. Campaign breakdown
-  const camps = await graphGet<{ data: any[] }>(
-    `/${account}/insights`,
-    {
-      time_range: timeRange,
-      fields: "campaign_id,campaign_name,spend,actions,objective",
       level: "campaign",
-      limit: "50",
+      fields: "campaign_id,campaign_name,spend,cpc,ctr,cpm,actions,action_values,objective",
+      limit: "500",
     },
     token,
   );
+
+  // Aggregate by date (timeseries) and by campaign.
+  const byDate = new Map<string, { spend: number; revenue: number }>();
+  const byCampaign = new Map<
+    string,
+    { name: string; objective: string; spend: number; conversions: number }
+  >();
+
+  let totalSpend = 0;
+  let totalRevenue = 0;
+  let totalConversions = 0;
+  let ctrWeightedNum = 0;
+  let cpmWeightedNum = 0;
+  let impressionsProxy = 0; // use spend as weight if impressions absent
+
+  for (const row of insights.data) {
+    const spend = parseFloat(row.spend) || 0;
+    const convType = pickConversionType(row.actions);
+    const conversions = extractMetaActionValue(row.actions, convType);
+    const revenue = extractMetaActionValue(row.action_values, convType);
+
+    totalSpend += spend;
+    totalRevenue += revenue;
+    totalConversions += conversions;
+
+    const ctr = parseFloat(row.ctr) || 0;
+    const cpm = parseFloat(row.cpm) || 0;
+    if (spend > 0) {
+      ctrWeightedNum += ctr * spend;
+      cpmWeightedNum += cpm * spend;
+      impressionsProxy += spend;
+    }
+
+    // Timeseries bucket
+    const date = row.date_start;
+    if (date) {
+      const cur = byDate.get(date) ?? { spend: 0, revenue: 0 };
+      cur.spend += spend;
+      cur.revenue += revenue;
+      byDate.set(date, cur);
+    }
+
+    // Campaign bucket
+    const cid = row.campaign_id;
+    if (cid) {
+      const cur = byCampaign.get(cid) ?? {
+        name: row.campaign_name ?? "—",
+        objective: row.objective ?? "—",
+        spend: 0,
+        conversions: 0,
+      };
+      cur.spend += spend;
+      cur.conversions += conversions;
+      byCampaign.set(cid, cur);
+    }
+  }
+
+  const timeseries: TimeSeriesPoint[] = Array.from(byDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, v]) => ({
+      date,
+      spend: +v.spend.toFixed(2),
+      roas: v.spend > 0 ? +(v.revenue / v.spend).toFixed(2) : 0,
+    }));
+
+  // Campaign status / budget metadata
   const campMeta = await graphGet<{ data: any[] }>(
     `/${account}/campaigns`,
-    { fields: "id,name,status,daily_budget,lifetime_budget,objective", limit: "50" },
+    { fields: "id,name,status,daily_budget,lifetime_budget,objective", limit: "500" },
     token,
   );
-  const statusById = new Map(campMeta.data.map((c) => [c.id, c]));
+  const metaById = new Map(campMeta.data.map((c) => [c.id, c]));
 
-  const campaigns: Campaign[] = camps.data.map((c: any) => {
-    const meta = statusById.get(c.campaign_id) ?? {};
+  const campaigns: Campaign[] = Array.from(byCampaign.entries()).map(([id, c]) => {
+    const meta = metaById.get(id) ?? {};
     const budget = Number(meta.daily_budget || meta.lifetime_budget || 0) / 100;
     return {
-      id: c.campaign_id,
-      name: c.campaign_name,
+      id,
+      name: c.name,
       status: (meta.status as Campaign["status"]) ?? "ACTIVE",
       budget,
-      spent: Number(c.spend || 0),
-      results: sumAction(c.actions, ["purchase", "omni_purchase", "lead", "complete_registration"]),
+      spent: +c.spend.toFixed(2),
+      results: c.conversions,
       objective: c.objective ?? meta.objective ?? "—",
     };
   });
 
   return {
     kpis: {
-      spend,
-      roas: spend > 0 ? +(revenue / spend).toFixed(2) : 0,
-      cpa: conversions > 0 ? +(spend / conversions).toFixed(2) : 0,
-      ctr: Number(t.ctr || 0),
-      cpm: Number(t.cpm || 0),
+      spend: +totalSpend.toFixed(2),
+      roas: totalSpend > 0 ? +(totalRevenue / totalSpend).toFixed(2) : 0,
+      cpa: totalConversions > 0 ? +(totalSpend / totalConversions).toFixed(2) : 0,
+      ctr: impressionsProxy > 0 ? +(ctrWeightedNum / impressionsProxy).toFixed(2) : 0,
+      cpm: impressionsProxy > 0 ? +(cpmWeightedNum / impressionsProxy).toFixed(2) : 0,
     },
     timeseries,
     campaigns,
