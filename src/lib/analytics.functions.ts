@@ -1066,7 +1066,7 @@ export const testMetaConnection = createServerFn({ method: "POST" })
     const token = process.env.META_ACCESS_TOKEN;
     const { data: c, error } = await supabaseAdmin
       .from("clients")
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
       .eq("id", data.clientId)
       .single();
     if (error || !c) throw new Error("Cliente não encontrado");
