@@ -22,36 +22,62 @@ export function mockPaid(clientId: string, range: DateRange): PaidData {
   const timeseries = Array.from({ length: days }).map((_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (days - 1 - i));
+    const spend = Math.round(baseSpend * (0.7 + r() * 0.6));
+    const roas = Number((baseRoas * (0.7 + r() * 0.6)).toFixed(2));
     return {
       date: d.toISOString().slice(5, 10),
-      spend: Math.round(baseSpend * (0.7 + r() * 0.6)),
-      roas: Number((baseRoas * (0.7 + r() * 0.6)).toFixed(2)),
+      spend,
+      revenue: Math.round(spend * roas),
+      roas,
     };
   });
   const totalSpend = timeseries.reduce((s, p) => s + p.spend, 0);
+  const totalRevenue = timeseries.reduce((s, p) => s + p.revenue, 0);
   const avgRoas = timeseries.reduce((s, p) => s + p.roas, 0) / timeseries.length;
   const objectives = ["Conversões", "Tráfego", "Engajamento", "Cadastros", "Alcance"];
   const statuses: Array<"ACTIVE" | "PAUSED" | "ENDED"> = ["ACTIVE", "ACTIVE", "ACTIVE", "PAUSED", "ENDED"];
   const campaigns = Array.from({ length: 6 }).map((_, i) => {
     const budget = Math.round(500 + r() * 4500);
     const spent = Math.round(budget * (0.3 + r() * 0.7));
+    const results = Math.round(spent / (5 + r() * 80));
+    const revenue = Math.round(spent * (1 + r() * 5));
+    const impressions = Math.round(spent * (50 + r() * 200));
+    const clicks = Math.round(impressions * (0.005 + r() * 0.04));
     return {
       id: `c-${clientId.slice(0, 4)}-${i}`,
       status: statuses[Math.floor(r() * statuses.length)],
       name: `CMP-${(i + 1).toString().padStart(2, "0")} · ${objectives[Math.floor(r() * objectives.length)]}`,
       budget,
       spent,
-      results: Math.round(spent / (5 + r() * 80)),
+      results,
+      revenue,
+      roas: spent > 0 ? Number((revenue / spent).toFixed(2)) : 0,
+      cpa: results > 0 ? Number((spent / results).toFixed(2)) : 0,
+      ctr: impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(2)) : 0,
+      cpm: impressions > 0 ? Number(((spent / impressions) * 1000).toFixed(2)) : 0,
+      impressions,
+      clicks,
       objective: objectives[Math.floor(r() * objectives.length)],
+      conversionType: "purchase",
     };
   });
+  const totalImpressions = campaigns.reduce((s, c) => s + c.impressions, 0);
+  const totalClicks = campaigns.reduce((s, c) => s + c.clicks, 0);
+  const totalResults = campaigns.reduce((s, c) => s + c.results, 0);
   return {
     kpis: {
       spend: totalSpend,
+      revenue: totalRevenue,
       roas: Number(avgRoas.toFixed(2)),
-      cpa: Number((totalSpend / Math.max(1, campaigns.reduce((s, c) => s + c.results, 0))).toFixed(2)),
-      ctr: Number((1 + r() * 4).toFixed(2)),
-      cpm: Number((10 + r() * 30).toFixed(2)),
+      cpa: Number((totalSpend / Math.max(1, totalResults)).toFixed(2)),
+      ctr: totalImpressions > 0 ? Number(((totalClicks / totalImpressions) * 100).toFixed(2)) : 0,
+      cpm: totalImpressions > 0 ? Number(((totalSpend / totalImpressions) * 1000).toFixed(2)) : 0,
+      impressions: totalImpressions,
+      clicks: totalClicks,
+      reach: Math.round(totalImpressions * 0.7),
+      frequency: 1.43,
+      conversions: totalResults,
+      conversionRate: totalClicks > 0 ? Number(((totalResults / totalClicks) * 100).toFixed(2)) : 0,
     },
     timeseries,
     campaigns,

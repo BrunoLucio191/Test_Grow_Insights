@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       clients: {
         Row: {
+          conversion_event: string | null
           created_at: string
           id: string
           ig_account_id: string | null
@@ -25,6 +26,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          conversion_event?: string | null
           created_at?: string
           id?: string
           ig_account_id?: string | null
@@ -34,6 +36,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          conversion_event?: string | null
           created_at?: string
           id?: string
           ig_account_id?: string | null

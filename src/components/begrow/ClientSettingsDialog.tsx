@@ -60,6 +60,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
   const [adId, setAdId] = useState("");
   const [pageId, setPageId] = useState("");
   const [igId, setIgId] = useState("");
+  const [convEvent, setConvEvent] = useState("");
   const [test, setTest] = useState<ConnectionTest | null>(null);
 
   useEffect(() => {
@@ -68,6 +69,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
       setAdId(client.meta_ad_account_id ?? "");
       setPageId(client.meta_page_id ?? "");
       setIgId(client.ig_account_id ?? "");
+      setConvEvent(client.conversion_event ?? "");
       setTest(null);
     }
   }, [client?.id, open]);
@@ -81,6 +83,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
           meta_ad_account_id: adId.trim() || null,
           meta_page_id: pageId.trim() || null,
           ig_account_id: igId.trim() || null,
+          conversion_event: convEvent.trim() || null,
         },
       }),
     onSuccess: () => {
@@ -144,6 +147,20 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
               value={igId}
               onChange={(e) => setIgId(e.target.value)}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="convev">
+              Evento de conversão <span className="text-muted-foreground">(opcional)</span>
+            </Label>
+            <Input
+              id="convev"
+              placeholder="ex.: purchase, omni_purchase, lead"
+              value={convEvent}
+              onChange={(e) => setConvEvent(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Sobrescreve o evento usado como "Resultados" da campanha. Deixe vazio para usar a detecção automática (purchase &gt; lead &gt; link_click).
+            </p>
           </div>
         </div>
 
