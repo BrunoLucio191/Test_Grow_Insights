@@ -2,13 +2,25 @@ export type DateRange = { from: string; to: string };
 
 export type PaidKpis = {
   spend: number;
+  revenue: number;
   roas: number;
   cpa: number;
   ctr: number;
   cpm: number;
+  impressions: number;
+  clicks: number;
+  reach: number;
+  frequency: number;
+  conversions: number;
+  conversionRate: number; // conversions / clicks * 100
 };
 
-export type TimeSeriesPoint = { date: string; spend: number; roas: number };
+export type TimeSeriesPoint = {
+  date: string;
+  spend: number;
+  revenue: number;
+  roas: number;
+};
 
 export type Campaign = {
   id: string;
@@ -17,13 +29,52 @@ export type Campaign = {
   budget: number;
   spent: number;
   results: number;
+  revenue: number;
+  roas: number;
+  cpa: number;
+  ctr: number;
+  cpm: number;
+  impressions: number;
+  clicks: number;
   objective: string;
+  conversionType: string;
 };
 
 export type PaidData = {
   kpis: PaidKpis;
   timeseries: TimeSeriesPoint[];
   campaigns: Campaign[];
+};
+
+export type BreakdownRow = {
+  key: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  results: number;
+  revenue: number;
+};
+
+export type AdRow = {
+  id: string;
+  name: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  results: number;
+  revenue: number;
+  cpa: number;
+  roas: number;
+  thumbnail?: string;
+};
+
+export type CampaignDetail = {
+  campaign: Campaign;
+  timeseries: TimeSeriesPoint[];
+  ads: AdRow[];
+  ageGender: BreakdownRow[];
+  device: BreakdownRow[];
 };
 
 export type OrganicKpis = {
@@ -55,6 +106,7 @@ export type ClientRow = {
   meta_ad_account_id: string | null;
   meta_page_id: string | null;
   ig_account_id: string | null;
+  conversion_event?: string | null;
 };
 
 // Detect seed/placeholder IDs used in local/demo clients so we don't hit Meta with fake IDs.
@@ -72,7 +124,9 @@ export type ClientValidation = {
   missing: string[];
 };
 
-export function validateClient(c: Pick<ClientRow, "meta_ad_account_id" | "meta_page_id" | "ig_account_id">): ClientValidation {
+export function validateClient(
+  c: Pick<ClientRow, "meta_ad_account_id" | "meta_page_id" | "ig_account_id">,
+): ClientValidation {
   const paidOk = !isPlaceholderId(c.meta_ad_account_id);
   const pageOk = !isPlaceholderId(c.meta_page_id);
   const igOk = !isPlaceholderId(c.ig_account_id);
