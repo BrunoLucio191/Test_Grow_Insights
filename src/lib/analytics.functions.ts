@@ -816,6 +816,7 @@ const updateClientSchema = z.object({
   meta_ad_account_id: z.string().trim().max(60).nullable().optional(),
   meta_page_id: z.string().trim().max(60).nullable().optional(),
   ig_account_id: z.string().trim().max(60).nullable().optional(),
+  conversion_event: z.string().trim().max(80).nullable().optional(),
 });
 
 export const updateClient = createServerFn({ method: "POST" })
@@ -826,6 +827,7 @@ export const updateClient = createServerFn({ method: "POST" })
       meta_ad_account_id?: string | null;
       meta_page_id?: string | null;
       ig_account_id?: string | null;
+      conversion_event?: string | null;
       updated_at: string;
     } = { updated_at: new Date().toISOString() };
     if (data.name !== undefined) patch.name = data.name;
@@ -835,17 +837,199 @@ export const updateClient = createServerFn({ method: "POST" })
       patch.meta_page_id = data.meta_page_id || null;
     if (data.ig_account_id !== undefined)
       patch.ig_account_id = data.ig_account_id || null;
+    if (data.conversion_event !== undefined)
+      patch.conversion_event = data.conversion_event || null;
 
     const { data: row, error } = await supabaseAdmin
       .from("clients")
       .update(patch)
       .eq("id", data.clientId)
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
       .single();
     if (error) throw new Error(error.message);
     await invalidateCache(data.clientId);
     return row as ClientRow;
   });
+
+/* -------------------- Campaign detail (drill-down) -------------------- */
+
+export const fetchCampaignDetail = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        clientId: z.string().uuid(),
+        campaignId: z.string().min(1),
+        range: dateRangeSchema,
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<import("./analytics-types").CampaignDetail> => {
+    const token = process.env.META_ACCESS_TOKEN;
+    if (!token) throw new Error("META_ACCESS_TOKEN não configurado");
+
+    const { data: c } = await supabaseAdmin
+      .from("clients")
+      .select("*")
+      .eq("id", data.clientId)
+      .single();
+    if (!c) throw new Error("Cliente não encontrado");
+    const client = c as ClientRow;
+
+    const timeRange = JSON.stringify({ since: data.range.from, until: data.range.to });
+    const attributionWindows = JSON.stringify(["7d_click", "1d_view"]);
+
+    // Daily timeseries for this campaign
+    const daily = await graphGet<{ data: any[] }>(
+      `/${data.campaignId}/insights`,
+      {
+        time_range: timeRange,
+        time_increment: "1",
+        action_attribution_windows: attributionWindows,
+        fields:
+          "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,status",
+        limit: "500",
+      },
+      token,
+    );
+
+    // Pick dominant conversion type from aggregated actions across the campaign
+    const actionsAgg = new Map<string, number>();
+    const valuesAgg = new Map<string, number>();
+    let totSpend = 0, totImp = 0, totClicks = 0, totReach = 0;
+    for (const row of daily.data) {
+      totSpend += parseFloat(row.spend) || 0;
+      totImp += parseFloat(row.impressions) || 0;
+      totClicks += parseFloat(row.clicks) || 0;
+      totReach = Math.max(totReach, parseFloat(row.reach) || 0);
+      for (const a of (row.actions ?? []) as MetaAction[]) {
+        actionsAgg.set(a.action_type, (actionsAgg.get(a.action_type) ?? 0) + (parseFloat(a.value) || 0));
+      }
+      for (const a of (row.action_values ?? []) as MetaAction[]) {
+        valuesAgg.set(a.action_type, (valuesAgg.get(a.action_type) ?? 0) + (parseFloat(a.value) || 0));
+      }
+    }
+    const convType = pickConversionType(actionsAgg, client.conversion_event ?? null);
+    const conversions = actionsAgg.get(convType) ?? 0;
+    const revenue = valuesAgg.get(convType) ?? 0;
+
+    const timeseries = daily.data
+      .map((row): import("./analytics-types").TimeSeriesPoint => {
+        const spend = parseFloat(row.spend) || 0;
+        const rev =
+          ((row.action_values ?? []) as MetaAction[]).find((a) => a.action_type === convType)
+            ?.value || "0";
+        const revNum = parseFloat(rev) || 0;
+        return {
+          date: row.date_start,
+          spend: +spend.toFixed(2),
+          revenue: +revNum.toFixed(2),
+          roas: spend > 0 ? +(revNum / spend).toFixed(2) : 0,
+        };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const first = daily.data[0] ?? {};
+    const campaign: Campaign = {
+      id: data.campaignId,
+      name: first.campaign_name ?? data.campaignId,
+      status: (first.status as Campaign["status"]) ?? "ACTIVE",
+      budget: 0,
+      spent: +totSpend.toFixed(2),
+      results: +conversions.toFixed(0),
+      revenue: +revenue.toFixed(2),
+      roas: totSpend > 0 ? +(revenue / totSpend).toFixed(2) : 0,
+      cpa: conversions > 0 ? +(totSpend / conversions).toFixed(2) : 0,
+      ctr: totImp > 0 ? +((totClicks / totImp) * 100).toFixed(2) : 0,
+      cpm: totImp > 0 ? +((totSpend / totImp) * 1000).toFixed(2) : 0,
+      impressions: totImp,
+      clicks: totClicks,
+      objective: first.objective ?? "—",
+      conversionType: convType,
+    };
+
+    // Ads (creative-level)
+    const ads: import("./analytics-types").AdRow[] = [];
+    try {
+      const adRows = await graphGet<{ data: any[] }>(
+        `/${data.campaignId}/insights`,
+        {
+          time_range: timeRange,
+          level: "ad",
+          action_attribution_windows: attributionWindows,
+          fields:
+            "ad_id,ad_name,spend,impressions,clicks,ctr,actions,action_values",
+          limit: "200",
+        },
+        token,
+      );
+      for (const r of adRows.data) {
+        const spend = parseFloat(r.spend) || 0;
+        const impressions = parseFloat(r.impressions) || 0;
+        const clicks = parseFloat(r.clicks) || 0;
+        const results = extractMetaActionValue(r.actions, convType);
+        const rev = extractMetaActionValue(r.action_values, convType);
+        ads.push({
+          id: r.ad_id,
+          name: r.ad_name ?? "—",
+          spend: +spend.toFixed(2),
+          impressions,
+          clicks,
+          ctr: impressions > 0 ? +((clicks / impressions) * 100).toFixed(2) : 0,
+          results: +results.toFixed(0),
+          revenue: +rev.toFixed(2),
+          cpa: results > 0 ? +(spend / results).toFixed(2) : 0,
+          roas: spend > 0 ? +(rev / spend).toFixed(2) : 0,
+        });
+      }
+    } catch (e) {
+      console.warn("[campaign-detail] ads falhou:", (e as Error).message);
+    }
+
+    // Breakdown helper
+    const fetchBreakdown = async (
+      breakdowns: string,
+    ): Promise<import("./analytics-types").BreakdownRow[]> => {
+      try {
+        const r = await graphGet<{ data: any[] }>(
+          `/${data.campaignId}/insights`,
+          {
+            time_range: timeRange,
+            breakdowns,
+            action_attribution_windows: attributionWindows,
+            fields: "spend,impressions,clicks,actions,action_values",
+            limit: "200",
+          },
+          token,
+        );
+        return (r.data ?? []).map((row) => {
+          const keyParts: string[] = [];
+          for (const b of breakdowns.split(",")) {
+            if (row[b] != null) keyParts.push(String(row[b]));
+          }
+          return {
+            key: keyParts.join(" · ") || "—",
+            spend: +(parseFloat(row.spend) || 0).toFixed(2),
+            impressions: parseFloat(row.impressions) || 0,
+            clicks: parseFloat(row.clicks) || 0,
+            results: +extractMetaActionValue(row.actions, convType).toFixed(0),
+            revenue: +extractMetaActionValue(row.action_values, convType).toFixed(2),
+          };
+        });
+      } catch (e) {
+        console.warn(`[campaign-detail] breakdown ${breakdowns} falhou:`, (e as Error).message);
+        return [];
+      }
+    };
+
+    const [ageGender, device] = await Promise.all([
+      fetchBreakdown("age,gender"),
+      fetchBreakdown("device_platform"),
+    ]);
+
+    return { campaign, timeseries, ads, ageGender, device };
+  });
+
+
 
 export type ConnectionCheck = {
   ok: boolean;
