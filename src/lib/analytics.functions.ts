@@ -215,15 +215,31 @@ function extractMetaActionValue(arr: MetaAction[] | undefined, actionType: strin
 }
 
 /**
- * Conversion fallback chain: purchase → lead → link_click.
- * Returns the action_type that was actually matched (so revenue can use the same key).
+ * Eventos de conversão ordenados por prioridade — espelha o que o Gerenciador
+ * de Anúncios mostra como "Resultados" na maioria dos objetivos focados em
+ * conversão (compra/lead). Caímos para link_click apenas se nada acima existir.
  */
-const CONVERSION_FALLBACK = ["purchase", "lead", "link_click"] as const;
+const CONVERSION_PRIORITY = [
+  "omni_purchase",
+  "offsite_conversion.fb_pixel_purchase",
+  "onsite_conversion.purchase",
+  "purchase",
+  "offsite_conversion.fb_pixel_lead",
+  "onsite_conversion.lead_grouped",
+  "lead",
+  "complete_registration",
+  "offsite_conversion.fb_pixel_complete_registration",
+  "link_click",
+] as const;
 
-function pickConversionType(actions: MetaAction[] | undefined): string {
-  if (!actions) return "link_click";
-  for (const type of CONVERSION_FALLBACK) {
-    if (actions.some((a) => a.action_type === type)) return type;
+/** Picks the dominant conversion type from an aggregated list of actions. */
+function pickConversionType(
+  aggregated: Map<string, number>,
+  override?: string | null,
+): string {
+  if (override && aggregated.has(override)) return override;
+  for (const type of CONVERSION_PRIORITY) {
+    if (aggregated.has(type) && (aggregated.get(type) ?? 0) > 0) return type;
   }
   return "link_click";
 }
@@ -244,6 +260,8 @@ async function fetchMetaAdsReal(
     : `act_${client.meta_ad_account_id}`;
 
   const timeRange = JSON.stringify({ since: range.from, until: range.to });
+  // Janela de atribuição padrão do Gerenciador
+  const attributionWindows = JSON.stringify(["7d_click", "1d_view"]);
 
   // Single insights call: per-campaign per-day rows with raw actions/action_values.
   const insights = await graphGet<{ data: any[] }>(
@@ -252,75 +270,81 @@ async function fetchMetaAdsReal(
       time_range: timeRange,
       time_increment: "1",
       level: "campaign",
-      fields: "campaign_id,campaign_name,spend,cpc,ctr,cpm,actions,action_values,objective",
+      action_attribution_windows: attributionWindows,
+      fields:
+        "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective",
       limit: "500",
     },
     token,
   );
 
-  // Aggregate by date (timeseries) and by campaign.
-  const byDate = new Map<string, { spend: number; revenue: number }>();
-  const byCampaign = new Map<
-    string,
-    { name: string; objective: string; spend: number; conversions: number }
-  >();
-
-  let totalSpend = 0;
-  let totalRevenue = 0;
-  let totalConversions = 0;
-  let ctrWeightedNum = 0;
-  let cpmWeightedNum = 0;
-  let impressionsProxy = 0; // use spend as weight if impressions absent
+  // Per-row: accumulate raw actions per campaign so we can pick a dominant type.
+  type CampAcc = {
+    name: string;
+    objective: string;
+    spend: number;
+    impressions: number;
+    clicks: number;
+    reach: number;
+    actionsAgg: Map<string, number>;
+    valuesAgg: Map<string, number>;
+    byDate: Map<string, { spend: number; actions: Map<string, number>; values: Map<string, number> }>;
+  };
+  const byCampaign = new Map<string, CampAcc>();
 
   for (const row of insights.data) {
-    const spend = parseFloat(row.spend) || 0;
-    const convType = pickConversionType(row.actions);
-    const conversions = extractMetaActionValue(row.actions, convType);
-    const revenue = extractMetaActionValue(row.action_values, convType);
-
-    totalSpend += spend;
-    totalRevenue += revenue;
-    totalConversions += conversions;
-
-    const ctr = parseFloat(row.ctr) || 0;
-    const cpm = parseFloat(row.cpm) || 0;
-    if (spend > 0) {
-      ctrWeightedNum += ctr * spend;
-      cpmWeightedNum += cpm * spend;
-      impressionsProxy += spend;
-    }
-
-    // Timeseries bucket
-    const date = row.date_start;
-    if (date) {
-      const cur = byDate.get(date) ?? { spend: 0, revenue: 0 };
-      cur.spend += spend;
-      cur.revenue += revenue;
-      byDate.set(date, cur);
-    }
-
-    // Campaign bucket
     const cid = row.campaign_id;
-    if (cid) {
-      const cur = byCampaign.get(cid) ?? {
+    if (!cid) continue;
+    const spend = parseFloat(row.spend) || 0;
+    const impressions = parseFloat(row.impressions) || 0;
+    const clicks = parseFloat(row.clicks) || 0;
+    const reach = parseFloat(row.reach) || 0;
+
+    const acc =
+      byCampaign.get(cid) ??
+      ({
         name: row.campaign_name ?? "—",
         objective: row.objective ?? "—",
         spend: 0,
-        conversions: 0,
-      };
-      cur.spend += spend;
-      cur.conversions += conversions;
-      byCampaign.set(cid, cur);
-    }
-  }
+        impressions: 0,
+        clicks: 0,
+        reach: 0,
+        actionsAgg: new Map(),
+        valuesAgg: new Map(),
+        byDate: new Map(),
+      } as CampAcc);
 
-  const timeseries: TimeSeriesPoint[] = Array.from(byDate.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, v]) => ({
-      date,
-      spend: +v.spend.toFixed(2),
-      roas: v.spend > 0 ? +(v.revenue / v.spend).toFixed(2) : 0,
-    }));
+    acc.spend += spend;
+    acc.impressions += impressions;
+    acc.clicks += clicks;
+    acc.reach = Math.max(acc.reach, reach); // reach is unique users; max é melhor proxy do que soma
+    for (const a of (row.actions ?? []) as MetaAction[]) {
+      const v = parseFloat(a.value) || 0;
+      acc.actionsAgg.set(a.action_type, (acc.actionsAgg.get(a.action_type) ?? 0) + v);
+    }
+    for (const a of (row.action_values ?? []) as MetaAction[]) {
+      const v = parseFloat(a.value) || 0;
+      acc.valuesAgg.set(a.action_type, (acc.valuesAgg.get(a.action_type) ?? 0) + v);
+    }
+
+    const date = row.date_start;
+    if (date) {
+      const bucket =
+        acc.byDate.get(date) ??
+        { spend: 0, actions: new Map<string, number>(), values: new Map<string, number>() };
+      bucket.spend += spend;
+      for (const a of (row.actions ?? []) as MetaAction[]) {
+        const v = parseFloat(a.value) || 0;
+        bucket.actions.set(a.action_type, (bucket.actions.get(a.action_type) ?? 0) + v);
+      }
+      for (const a of (row.action_values ?? []) as MetaAction[]) {
+        const v = parseFloat(a.value) || 0;
+        bucket.values.set(a.action_type, (bucket.values.get(a.action_type) ?? 0) + v);
+      }
+      acc.byDate.set(date, bucket);
+    }
+    byCampaign.set(cid, acc);
+  }
 
   // Campaign status / budget metadata
   const campMeta = await graphGet<{ data: any[] }>(
@@ -330,27 +354,81 @@ async function fetchMetaAdsReal(
   );
   const metaById = new Map(campMeta.data.map((c) => [c.id, c]));
 
+  // Build per-campaign rows with the dominant conversion type chosen once.
+  let totalSpend = 0;
+  let totalRevenue = 0;
+  let totalConversions = 0;
+  let totalImpressions = 0;
+  let totalClicks = 0;
+  let totalReach = 0;
+  const dateBucket = new Map<string, { spend: number; revenue: number }>();
+
   const campaigns: Campaign[] = Array.from(byCampaign.entries()).map(([id, c]) => {
     const meta = metaById.get(id) ?? {};
+    const convType = pickConversionType(c.actionsAgg, client.conversion_event ?? null);
+    const conversions = c.actionsAgg.get(convType) ?? 0;
+    const revenue = c.valuesAgg.get(convType) ?? 0;
     const budget = Number(meta.daily_budget || meta.lifetime_budget || 0) / 100;
+    const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
+    const cpm = c.impressions > 0 ? (c.spend / c.impressions) * 1000 : 0;
+
+    totalSpend += c.spend;
+    totalRevenue += revenue;
+    totalConversions += conversions;
+    totalImpressions += c.impressions;
+    totalClicks += c.clicks;
+    totalReach += c.reach;
+
+    // Timeseries por dia (somando campanhas, usando o convType escolhido)
+    for (const [date, b] of c.byDate.entries()) {
+      const cur = dateBucket.get(date) ?? { spend: 0, revenue: 0 };
+      cur.spend += b.spend;
+      cur.revenue += b.values.get(convType) ?? 0;
+      dateBucket.set(date, cur);
+    }
+
     return {
       id,
       name: c.name,
       status: (meta.status as Campaign["status"]) ?? "ACTIVE",
       budget,
       spent: +c.spend.toFixed(2),
-      results: c.conversions,
+      results: +conversions.toFixed(0),
+      revenue: +revenue.toFixed(2),
+      roas: c.spend > 0 ? +(revenue / c.spend).toFixed(2) : 0,
+      cpa: conversions > 0 ? +(c.spend / conversions).toFixed(2) : 0,
+      ctr: +ctr.toFixed(2),
+      cpm: +cpm.toFixed(2),
+      impressions: c.impressions,
+      clicks: c.clicks,
       objective: c.objective ?? meta.objective ?? "—",
+      conversionType: convType,
     };
   });
+
+  const timeseries: TimeSeriesPoint[] = Array.from(dateBucket.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, v]) => ({
+      date,
+      spend: +v.spend.toFixed(2),
+      revenue: +v.revenue.toFixed(2),
+      roas: v.spend > 0 ? +(v.revenue / v.spend).toFixed(2) : 0,
+    }));
 
   return {
     kpis: {
       spend: +totalSpend.toFixed(2),
+      revenue: +totalRevenue.toFixed(2),
       roas: totalSpend > 0 ? +(totalRevenue / totalSpend).toFixed(2) : 0,
       cpa: totalConversions > 0 ? +(totalSpend / totalConversions).toFixed(2) : 0,
-      ctr: impressionsProxy > 0 ? +(ctrWeightedNum / impressionsProxy).toFixed(2) : 0,
-      cpm: impressionsProxy > 0 ? +(cpmWeightedNum / impressionsProxy).toFixed(2) : 0,
+      ctr: totalImpressions > 0 ? +((totalClicks / totalImpressions) * 100).toFixed(2) : 0,
+      cpm: totalImpressions > 0 ? +((totalSpend / totalImpressions) * 1000).toFixed(2) : 0,
+      impressions: totalImpressions,
+      clicks: totalClicks,
+      reach: totalReach,
+      frequency: totalReach > 0 ? +(totalImpressions / totalReach).toFixed(2) : 0,
+      conversions: +totalConversions.toFixed(0),
+      conversionRate: totalClicks > 0 ? +((totalConversions / totalClicks) * 100).toFixed(2) : 0,
     },
     timeseries,
     campaigns,
