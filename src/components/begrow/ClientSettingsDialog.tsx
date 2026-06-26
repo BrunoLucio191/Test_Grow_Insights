@@ -148,6 +148,20 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
               onChange={(e) => setIgId(e.target.value)}
             />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="convev">
+              Evento de conversão <span className="text-muted-foreground">(opcional)</span>
+            </Label>
+            <Input
+              id="convev"
+              placeholder="ex.: purchase, omni_purchase, lead"
+              value={convEvent}
+              onChange={(e) => setConvEvent(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Sobrescreve o evento usado como "Resultados" da campanha. Deixe vazio para usar a detecção automática (purchase &gt; lead &gt; link_click).
+            </p>
+          </div>
         </div>
 
         {test && (
