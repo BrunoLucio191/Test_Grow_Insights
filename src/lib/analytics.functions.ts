@@ -79,7 +79,7 @@ export const createClient = createServerFn({ method: "POST" })
     const { data: row, error } = await supabaseAdmin
       .from("clients")
       .insert({ name: data.name })
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
       .single();
     if (error) throw new Error(error.message);
     return row as ClientRow;
