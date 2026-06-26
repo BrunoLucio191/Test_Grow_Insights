@@ -63,13 +63,13 @@ export const listClients = createServerFn({ method: "GET" }).handler(
   async (): Promise<ClientRow[]> => {
     const { data, error } = await supabaseAdmin
       .from("clients")
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
       .order("name", { ascending: true });
     if (error) {
       console.error("listClients error:", error);
       return [];
     }
-    return data ?? [];
+    return (data as ClientRow[]) ?? [];
   },
 );
 
