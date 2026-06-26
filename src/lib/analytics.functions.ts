@@ -35,7 +35,20 @@ function isPlaceholder(id: string | null | undefined): boolean {
 }
 
 const EMPTY_PAID: PaidData = {
-  kpis: { spend: 0, roas: 0, cpa: 0, ctr: 0, cpm: 0 },
+  kpis: {
+    spend: 0,
+    revenue: 0,
+    roas: 0,
+    cpa: 0,
+    ctr: 0,
+    cpm: 0,
+    impressions: 0,
+    clicks: 0,
+    reach: 0,
+    frequency: 0,
+    conversions: 0,
+    conversionRate: 0,
+  },
   timeseries: [],
   campaigns: [],
 };
