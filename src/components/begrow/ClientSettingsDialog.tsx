@@ -60,6 +60,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
   const [adId, setAdId] = useState("");
   const [pageId, setPageId] = useState("");
   const [igId, setIgId] = useState("");
+  const [convEvent, setConvEvent] = useState("");
   const [test, setTest] = useState<ConnectionTest | null>(null);
 
   useEffect(() => {
@@ -68,6 +69,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
       setAdId(client.meta_ad_account_id ?? "");
       setPageId(client.meta_page_id ?? "");
       setIgId(client.ig_account_id ?? "");
+      setConvEvent(client.conversion_event ?? "");
       setTest(null);
     }
   }, [client?.id, open]);
