@@ -490,38 +490,75 @@ async function fetchOrganicReal(
   let engagementCount = 0;
   const topPosts: TopPost[] = [];
 
-  // Facebook Page insights
+  // Resolver Page Access Token (FB Page insights exigem token da página, não do usuário)
+  let pageToken = token;
   if (client.meta_page_id) {
     try {
-      const fb = await graphGet<{ data: any[] }>(
-        `/${client.meta_page_id}/insights`,
-        {
-          metric: "page_impressions_unique,page_fan_adds,page_views_total,page_post_engagements",
-          since: range.from,
-          until: range.to,
-        },
+      const accounts = await graphGet<{ data: Array<{ id: string; access_token: string }> }>(
+        `/me/accounts`,
+        { fields: "id,access_token", limit: "200" },
         token,
       );
-      for (const m of fb.data) {
-        const total = (m.values ?? []).reduce((s: number, v: any) => s + Number(v.value || 0), 0);
-        if (m.name === "page_impressions_unique") reach += total;
-        if (m.name === "page_fan_adds") newFollowers += total;
-        if (m.name === "page_views_total") profileVisits += total;
-        if (m.name === "page_post_engagements") {
-          engagementSum += total;
-          engagementCount += 1;
-        }
+      const match = accounts.data?.find((a) => a.id === client.meta_page_id);
+      if (match?.access_token) pageToken = match.access_token;
+      else console.warn(`[organic] Page token não encontrado para ${client.meta_page_id}; usando user token (provavelmente vai falhar).`);
+    } catch (e) {
+      console.warn("[organic] /me/accounts falhou:", e);
+    }
+  }
+
+  // Facebook Page insights — métrica granular com try/catch individual
+  if (client.meta_page_id) {
+    const tryMetric = async (metric: string) => {
+      try {
+        const r = await graphGet<{ data: any[] }>(
+          `/${client.meta_page_id}/insights`,
+          { metric, since: range.from, until: range.to, period: "day" },
+          pageToken,
+        );
+        return r.data ?? [];
+      } catch (e) {
+        console.warn(`[organic][fb] métrica "${metric}" falhou:`, (e as Error).message);
+        return [];
       }
-      // FB top posts
+    };
+
+    const sumValues = (data: any[], name: string) => {
+      for (const m of data) {
+        if (m.name !== name) continue;
+        return (m.values ?? []).reduce((s: number, v: any) => s + Number(v.value || 0), 0);
+      }
+      return 0;
+    };
+
+    const [imp, fans, views, eng] = await Promise.all([
+      tryMetric("page_impressions_unique"),
+      tryMetric("page_fan_adds"),
+      tryMetric("page_views_total"),
+      tryMetric("page_post_engagements"),
+    ]);
+
+    reach += sumValues(imp, "page_impressions_unique");
+    newFollowers += sumValues(fans, "page_fan_adds");
+    profileVisits += sumValues(views, "page_views_total");
+    const engTotal = sumValues(eng, "page_post_engagements");
+    if (engTotal > 0) {
+      engagementSum += engTotal;
+      engagementCount += 1;
+    }
+
+    // FB top posts
+    try {
       const posts = await graphGet<{ data: any[] }>(
         `/${client.meta_page_id}/posts`,
         {
-          fields: "id,message,full_picture,created_time,likes.summary(true),comments.summary(true),insights.metric(post_impressions_unique)",
+          fields:
+            "id,message,full_picture,created_time,likes.summary(true),comments.summary(true),insights.metric(post_impressions_unique)",
           since: range.from,
           until: range.to,
           limit: "10",
         },
-        token,
+        pageToken,
       );
       for (const p of posts.data ?? []) {
         topPosts.push({
@@ -536,7 +573,7 @@ async function fetchOrganicReal(
         });
       }
     } catch (e) {
-      console.error("FB organic fetch failed:", e);
+      console.warn("[organic][fb] top posts falhou:", (e as Error).message);
     }
   }
 
