@@ -83,6 +83,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
           meta_ad_account_id: adId.trim() || null,
           meta_page_id: pageId.trim() || null,
           ig_account_id: igId.trim() || null,
+          conversion_event: convEvent.trim() || null,
         },
       }),
     onSuccess: () => {
