@@ -577,31 +577,51 @@ async function fetchOrganicReal(
     }
   }
 
-  // Instagram insights
+  // Instagram insights (Graph API v19: total_value para reach/profile_views/follower_count)
   if (client.ig_account_id) {
-    try {
-      const ig = await graphGet<{ data: any[] }>(
-        `/${client.ig_account_id}/insights`,
-        {
-          metric: "reach,profile_views,follower_count",
-          period: "day",
-          since: range.from,
-          until: range.to,
-        },
-        token,
-      );
-      for (const m of ig.data) {
-        const total = (m.values ?? []).reduce((s: number, v: any) => s + Number(v.value || 0), 0);
-        if (m.name === "reach") reach += total;
-        if (m.name === "profile_views") profileVisits += total;
-        if (m.name === "follower_count") newFollowers += total;
+    const tryIg = async (params: Record<string, string>) => {
+      try {
+        const r = await graphGet<{ data: any[] }>(
+          `/${client.ig_account_id}/insights`,
+          { ...params, since: range.from, until: range.to },
+          token,
+        );
+        return r.data ?? [];
+      } catch (e) {
+        console.warn(`[organic][ig] insights ${JSON.stringify(params)} falhou:`, (e as Error).message);
+        return [];
       }
-      // IG top media
+    };
+
+    const sumIg = (data: any[], name: string) => {
+      for (const m of data) {
+        if (m.name !== name) continue;
+        // v19 total_value: { total_value: { value: N } }
+        if (m.total_value?.value != null) return Number(m.total_value.value) || 0;
+        // legacy values[]
+        return (m.values ?? []).reduce((s: number, v: any) => s + Number(v.value || 0), 0);
+      }
+      return 0;
+    };
+
+    const [reachData, visitsData, followersData] = await Promise.all([
+      tryIg({ metric: "reach", metric_type: "total_value", period: "day" }),
+      tryIg({ metric: "profile_views", metric_type: "total_value", period: "day" }),
+      tryIg({ metric: "follower_count", period: "day" }),
+    ]);
+
+    reach += sumIg(reachData, "reach");
+    profileVisits += sumIg(visitsData, "profile_views");
+    newFollowers += sumIg(followersData, "follower_count");
+
+    // IG top media
+    try {
       const media = await graphGet<{ data: any[] }>(
         `/${client.ig_account_id}/media`,
         {
-          fields: "id,caption,media_url,thumbnail_url,like_count,comments_count,timestamp,insights.metric(reach)",
-          limit: "10",
+          fields:
+            "id,caption,media_url,thumbnail_url,like_count,comments_count,timestamp,insights.metric(reach)",
+          limit: "25",
         },
         token,
       );
@@ -620,7 +640,7 @@ async function fetchOrganicReal(
         });
       }
     } catch (e) {
-      console.error("IG organic fetch failed:", e);
+      console.warn("[organic][ig] media falhou:", (e as Error).message);
     }
   }
 
