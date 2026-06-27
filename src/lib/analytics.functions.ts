@@ -33,11 +33,12 @@ function attrToArray(value: string | null | undefined): string[] {
   return value.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-function scopeKey(base: Scope, attribution?: string | null): string {
+function scopeKey(base: "paid" | "organic", attribution?: string | null): string {
   const attr = attribution ?? "7d_click,1d_view";
   if (attr === "7d_click,1d_view") return base; // backward compatible
-  return `${base}:atr=${attr}` as Scope;
+  return `${base}:atr=${attr}`;
 }
+
 
 
 // Default: use real Meta API. Set USE_MOCKS=true to force synthetic data.
