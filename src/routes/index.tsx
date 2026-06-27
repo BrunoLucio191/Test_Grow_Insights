@@ -71,13 +71,23 @@ function Dashboard() {
 
   const selected = clients?.find((c) => c.id === selectedId) ?? null;
 
+  // Sync client's default attribution when changing client
+  useEffect(() => {
+    if (selected?.attribution_window) {
+      setAttribution(selected.attribution_window as AttributionWindow);
+    } else {
+      setAttribution(DEFAULT_ATTRIBUTION);
+    }
+  }, [selected?.id, selected?.attribution_window]);
+
   const { data: cacheStatus } = useQuery({
-    queryKey: ["cache-status", selectedId, range.from, range.to],
+    queryKey: ["cache-status", selectedId, range.from, range.to, attribution],
     queryFn: () =>
-      cacheStatusFn({ data: { clientId: selectedId!, range } }),
+      cacheStatusFn({ data: { clientId: selectedId!, range, attribution } }),
     enabled: !!selectedId,
     refetchInterval: 60_000,
   });
+
 
   const onSync = async () => {
     if (!selectedId || !selected) return;
