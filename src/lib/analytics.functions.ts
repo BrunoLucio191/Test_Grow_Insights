@@ -462,23 +462,27 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<PaidData> => {
     if (USE_MOCKS) return mockPaid(data.clientId, data.range);
 
-    const cached = await readCache<PaidData>(data.clientId, "paid", data.range, false);
-    if (cached) return cached;
-
     const { data: client } = await supabaseAdmin
       .from("clients")
       .select("*")
       .eq("id", data.clientId)
       .single();
     if (!client) throw new Error("Cliente não encontrado");
-    if (isPlaceholder((client as ClientRow).meta_ad_account_id)) {
-      console.warn(`[paid] cliente "${(client as ClientRow).name}" sem meta_ad_account_id real (placeholder).`);
+    const c = client as ClientRow;
+    const attr = data.attribution ?? c.attribution_window ?? "7d_click,1d_view";
+    const sk = scopeKey("paid", attr);
+
+    const cached = await readCache<PaidData>(data.clientId, sk, data.range, false);
+    if (cached) return cached;
+
+    if (isPlaceholder(c.meta_ad_account_id)) {
+      console.warn(`[paid] cliente "${c.name}" sem meta_ad_account_id real (placeholder).`);
       return EMPTY_PAID;
     }
 
     try {
-      const fresh = await fetchMetaAdsReal(client as ClientRow, data.range);
-      await writeCache(data.clientId, "paid", data.range, fresh);
+      const fresh = await fetchMetaAdsReal(c, data.range, attr);
+      await writeCache(data.clientId, sk, data.range, fresh);
       return fresh;
     } catch (e) {
       console.error("fetchMetaAdsReal failed:", e);
@@ -487,7 +491,7 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
         .from("meta_cache")
         .select("payload")
         .eq("client_id", data.clientId)
-        .eq("scope", "paid")
+        .eq("scope", sk)
         .eq("range_from", data.range.from)
         .eq("range_to", data.range.to)
         .maybeSingle();
@@ -495,6 +499,7 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
       throw e;
     }
   });
+
 
 /* -------------------- Organic (FB + IG) -------------------- */
 
