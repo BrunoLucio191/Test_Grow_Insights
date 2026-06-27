@@ -17,10 +17,28 @@ const dateRangeSchema = z.object({
   to: z.string(),
 });
 
+const attributionSchema = z
+  .enum(["7d_click,1d_view", "1d_click,1d_view", "7d_click", "1d_click"])
+  .optional()
+  .nullable();
+
 const clientRangeSchema = z.object({
   clientId: z.string().uuid(),
   range: dateRangeSchema,
+  attribution: attributionSchema,
 });
+
+function attrToArray(value: string | null | undefined): string[] {
+  if (!value) return ["7d_click", "1d_view"];
+  return value.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function scopeKey(base: Scope, attribution?: string | null): string {
+  const attr = attribution ?? "7d_click,1d_view";
+  if (attr === "7d_click,1d_view") return base; // backward compatible
+  return `${base}:atr=${attr}` as Scope;
+}
+
 
 // Default: use real Meta API. Set USE_MOCKS=true to force synthetic data.
 const USE_MOCKS = (process.env.USE_MOCKS ?? "false") === "true";
