@@ -887,6 +887,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         clientId: z.string().uuid(),
         campaignId: z.string().min(1),
         range: dateRangeSchema,
+        attribution: attributionSchema,
       })
       .parse(d),
   )
@@ -903,7 +904,9 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     const client = c as ClientRow;
 
     const timeRange = JSON.stringify({ since: data.range.from, until: data.range.to });
-    const attributionWindows = JSON.stringify(["7d_click", "1d_view"]);
+    const attrChoice = data.attribution ?? client.attribution_window ?? "7d_click,1d_view";
+    const attributionWindows = JSON.stringify(attrToArray(attrChoice));
+
 
     // Daily timeseries for this campaign
     const daily = await graphGet<{ data: any[] }>(
