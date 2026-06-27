@@ -68,6 +68,7 @@ export type AdRow = {
   cpa: number;
   roas: number;
   thumbnail?: string;
+  inline_link_clicks?: number;
 };
 
 export type CampaignDetail = {
