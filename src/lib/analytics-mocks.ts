@@ -65,6 +65,7 @@ export function mockPaid(clientId: string, range: DateRange): PaidData {
   });
   const totalImpressions = campaigns.reduce((s, c) => s + c.impressions, 0);
   const totalClicks = campaigns.reduce((s, c) => s + c.clicks, 0);
+  const totalInlineLinkClicks = campaigns.reduce((s, c) => s + (c.inline_link_clicks ?? c.clicks), 0);
   const totalResults = campaigns.reduce((s, c) => s + c.results, 0);
   return {
     kpis: {
@@ -72,7 +73,7 @@ export function mockPaid(clientId: string, range: DateRange): PaidData {
       revenue: totalRevenue,
       roas: Number(avgRoas.toFixed(2)),
       cpa: Number((totalSpend / Math.max(1, totalResults)).toFixed(2)),
-      ctr: totalImpressions > 0 ? Number(((totalClicks / totalImpressions) * 100).toFixed(2)) : 0,
+      ctr: totalImpressions > 0 ? Number(((totalInlineLinkClicks / totalImpressions) * 100).toFixed(2)) : 0,
       cpm: totalImpressions > 0 ? Number(((totalSpend / totalImpressions) * 1000).toFixed(2)) : 0,
       impressions: totalImpressions,
       clicks: totalClicks,
