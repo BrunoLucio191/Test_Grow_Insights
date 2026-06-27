@@ -56,12 +56,14 @@ function Dashboard() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [range, setRange] = useState<DateRange>(defaultRange());
+  const [attribution, setAttribution] = useState<AttributionWindow>(DEFAULT_ATTRIBUTION);
   const [syncing, setSyncing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({
     paid: "idle",
     organic: "idle",
   });
+
 
   useEffect(() => {
     if (clients?.length && !selectedId) setSelectedId(clients[0].id);
