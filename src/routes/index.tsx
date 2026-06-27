@@ -172,6 +172,8 @@ function Dashboard() {
               client={selected}
               range={range}
               onRangeChange={setRange}
+              attribution={attribution}
+              onAttributionChange={setAttribution}
               onSync={onSync}
               onOpenSettings={() => setSettingsOpen(true)}
               syncing={syncing}
@@ -198,7 +200,7 @@ function Dashboard() {
                 </TabsList>
 
                 <TabsContent value="paid">
-                  <PaidTab clientId={selected.id} range={range} />
+                  <PaidTab clientId={selected.id} clientName={selected.name} range={range} attribution={attribution} />
                 </TabsContent>
                 <TabsContent value="organic">
                   <OrganicTab clientId={selected.id} range={range} />
@@ -209,6 +211,7 @@ function Dashboard() {
               </Tabs>
             </div>
           </>
+
         )}
       </main>
     </div>
