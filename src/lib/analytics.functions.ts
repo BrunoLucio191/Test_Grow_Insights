@@ -294,7 +294,7 @@ async function fetchMetaAdsReal(
       level: "campaign",
       action_attribution_windows: attributionWindows,
       fields:
-        "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective",
+        "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,inline_link_clicks,inline_link_click_ctr",
       limit: "500",
     },
     token,
@@ -307,6 +307,7 @@ async function fetchMetaAdsReal(
     spend: number;
     impressions: number;
     clicks: number;
+    inline_link_clicks: number;
     reach: number;
     actionsAgg: Map<string, number>;
     valuesAgg: Map<string, number>;
@@ -320,6 +321,7 @@ async function fetchMetaAdsReal(
     const spend = parseFloat(row.spend) || 0;
     const impressions = parseFloat(row.impressions) || 0;
     const clicks = parseFloat(row.clicks) || 0;
+    const inline_link_clicks = parseFloat(row.inline_link_clicks) || 0;
     const reach = parseFloat(row.reach) || 0;
 
     const acc =
@@ -330,6 +332,7 @@ async function fetchMetaAdsReal(
         spend: 0,
         impressions: 0,
         clicks: 0,
+        inline_link_clicks: 0,
         reach: 0,
         actionsAgg: new Map(),
         valuesAgg: new Map(),
@@ -339,6 +342,7 @@ async function fetchMetaAdsReal(
     acc.spend += spend;
     acc.impressions += impressions;
     acc.clicks += clicks;
+    acc.inline_link_clicks += inline_link_clicks;
     acc.reach = Math.max(acc.reach, reach); // reach is unique users; max é melhor proxy do que soma
     for (const a of (row.actions ?? []) as MetaAction[]) {
       const v = parseFloat(a.value) || 0;
@@ -382,6 +386,7 @@ async function fetchMetaAdsReal(
   let totalConversions = 0;
   let totalImpressions = 0;
   let totalClicks = 0;
+  let totalInlineLinkClicks = 0;
   let totalReach = 0;
   const dateBucket = new Map<string, { spend: number; revenue: number }>();
 
@@ -391,7 +396,7 @@ async function fetchMetaAdsReal(
     const conversions = c.actionsAgg.get(convType) ?? 0;
     const revenue = c.valuesAgg.get(convType) ?? 0;
     const budget = Number(meta.daily_budget || meta.lifetime_budget || 0) / 100;
-    const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
+    const ctr = c.impressions > 0 ? (c.inline_link_clicks / c.impressions) * 100 : 0;
     const cpm = c.impressions > 0 ? (c.spend / c.impressions) * 1000 : 0;
 
     totalSpend += c.spend;
@@ -399,6 +404,7 @@ async function fetchMetaAdsReal(
     totalConversions += conversions;
     totalImpressions += c.impressions;
     totalClicks += c.clicks;
+    totalInlineLinkClicks += c.inline_link_clicks;
     totalReach += c.reach;
 
     // Timeseries por dia (somando campanhas, usando o convType escolhido)
@@ -425,6 +431,7 @@ async function fetchMetaAdsReal(
       clicks: c.clicks,
       objective: c.objective ?? meta.objective ?? "—",
       conversionType: convType,
+      inline_link_clicks: c.inline_link_clicks,
     };
   });
 
@@ -443,7 +450,7 @@ async function fetchMetaAdsReal(
       revenue: +totalRevenue.toFixed(2),
       roas: totalSpend > 0 ? +(totalRevenue / totalSpend).toFixed(2) : 0,
       cpa: totalConversions > 0 ? +(totalSpend / totalConversions).toFixed(2) : 0,
-      ctr: totalImpressions > 0 ? +((totalClicks / totalImpressions) * 100).toFixed(2) : 0,
+      ctr: totalImpressions > 0 ? +((totalInlineLinkClicks / totalImpressions) * 100).toFixed(2) : 0,
       cpm: totalImpressions > 0 ? +((totalSpend / totalImpressions) * 1000).toFixed(2) : 0,
       impressions: totalImpressions,
       clicks: totalClicks,
@@ -985,7 +992,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         time_increment: "1",
         action_attribution_windows: attributionWindows,
         fields:
-          "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,status",
+          "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,status,inline_link_clicks,inline_link_click_ctr",
         limit: "500",
       },
       token,
@@ -994,11 +1001,12 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     // Pick dominant conversion type from aggregated actions across the campaign
     const actionsAgg = new Map<string, number>();
     const valuesAgg = new Map<string, number>();
-    let totSpend = 0, totImp = 0, totClicks = 0, totReach = 0;
+    let totSpend = 0, totImp = 0, totClicks = 0, totInlineClicks = 0, totReach = 0;
     for (const row of daily.data) {
       totSpend += parseFloat(row.spend) || 0;
       totImp += parseFloat(row.impressions) || 0;
       totClicks += parseFloat(row.clicks) || 0;
+      totInlineClicks += parseFloat(row.inline_link_clicks) || 0;
       totReach = Math.max(totReach, parseFloat(row.reach) || 0);
       for (const a of (row.actions ?? []) as MetaAction[]) {
         actionsAgg.set(a.action_type, (actionsAgg.get(a.action_type) ?? 0) + (parseFloat(a.value) || 0));
@@ -1038,12 +1046,13 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       revenue: +revenue.toFixed(2),
       roas: totSpend > 0 ? +(revenue / totSpend).toFixed(2) : 0,
       cpa: conversions > 0 ? +(totSpend / conversions).toFixed(2) : 0,
-      ctr: totImp > 0 ? +((totClicks / totImp) * 100).toFixed(2) : 0,
+      ctr: totImp > 0 ? +((totInlineClicks / totImp) * 100).toFixed(2) : 0,
       cpm: totImp > 0 ? +((totSpend / totImp) * 1000).toFixed(2) : 0,
       impressions: totImp,
       clicks: totClicks,
       objective: first.objective ?? "—",
       conversionType: convType,
+      inline_link_clicks: totInlineClicks,
     };
 
     // Ads (creative-level)
@@ -1056,7 +1065,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
           level: "ad",
           action_attribution_windows: attributionWindows,
           fields:
-            "ad_id,ad_name,spend,impressions,clicks,ctr,actions,action_values",
+            "ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,inline_link_click_ctr,actions,action_values",
           limit: "200",
         },
         token,
@@ -1065,6 +1074,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         const spend = parseFloat(r.spend) || 0;
         const impressions = parseFloat(r.impressions) || 0;
         const clicks = parseFloat(r.clicks) || 0;
+        const inline_link_clicks = parseFloat(r.inline_link_clicks) || 0;
         const results = extractMetaActionValue(r.actions, convType);
         const rev = extractMetaActionValue(r.action_values, convType);
         ads.push({
@@ -1073,11 +1083,12 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
           spend: +spend.toFixed(2),
           impressions,
           clicks,
-          ctr: impressions > 0 ? +((clicks / impressions) * 100).toFixed(2) : 0,
+          ctr: impressions > 0 ? +((inline_link_clicks / impressions) * 100).toFixed(2) : 0,
           results: +results.toFixed(0),
           revenue: +rev.toFixed(2),
           cpa: results > 0 ? +(spend / results).toFixed(2) : 0,
           roas: spend > 0 ? +(rev / spend).toFixed(2) : 0,
+          inline_link_clicks,
         });
       }
     } catch (e) {

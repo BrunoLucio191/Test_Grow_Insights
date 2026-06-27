@@ -38,6 +38,7 @@ export type Campaign = {
   clicks: number;
   objective: string;
   conversionType: string;
+  inline_link_clicks?: number;
 };
 
 export type PaidData = {
@@ -67,6 +68,7 @@ export type AdRow = {
   cpa: number;
   roas: number;
   thumbnail?: string;
+  inline_link_clicks?: number;
 };
 
 export type CampaignDetail = {
