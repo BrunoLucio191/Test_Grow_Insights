@@ -386,6 +386,7 @@ async function fetchMetaAdsReal(
   let totalConversions = 0;
   let totalImpressions = 0;
   let totalClicks = 0;
+  let totalInlineLinkClicks = 0;
   let totalReach = 0;
   const dateBucket = new Map<string, { spend: number; revenue: number }>();
 
@@ -395,7 +396,7 @@ async function fetchMetaAdsReal(
     const conversions = c.actionsAgg.get(convType) ?? 0;
     const revenue = c.valuesAgg.get(convType) ?? 0;
     const budget = Number(meta.daily_budget || meta.lifetime_budget || 0) / 100;
-    const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
+    const ctr = c.impressions > 0 ? (c.inline_link_clicks / c.impressions) * 100 : 0;
     const cpm = c.impressions > 0 ? (c.spend / c.impressions) * 1000 : 0;
 
     totalSpend += c.spend;
@@ -403,6 +404,7 @@ async function fetchMetaAdsReal(
     totalConversions += conversions;
     totalImpressions += c.impressions;
     totalClicks += c.clicks;
+    totalInlineLinkClicks += c.inline_link_clicks;
     totalReach += c.reach;
 
     // Timeseries por dia (somando campanhas, usando o convType escolhido)
