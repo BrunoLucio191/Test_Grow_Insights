@@ -60,13 +60,14 @@ function MiniStat({
   );
 }
 
-export function CampaignDetailDialog({ clientId, campaign, range, open, onOpenChange }: Props) {
+export function CampaignDetailDialog({ clientId, campaign, range, attribution, open, onOpenChange }: Props) {
   const fn = useServerFn(fetchCampaignDetail);
   const { data, isLoading } = useQuery({
-    queryKey: ["campaign-detail", clientId, campaign?.id, range.from, range.to],
-    queryFn: () => fn({ data: { clientId, campaignId: campaign!.id, range } }),
-    enabled: open && !!campaign,
+    queryKey: ["campaign-detail", clientId, campaign?.id, range.from, range.to, attribution],
+    queryFn: () => fn({ data: { clientId, campaignId: campaign!.id, range, attribution } }),
+    enabled: open && !!campaign && !campaign.id.startsWith("group:"),
   });
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
