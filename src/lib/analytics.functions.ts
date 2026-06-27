@@ -450,7 +450,7 @@ async function fetchMetaAdsReal(
       revenue: +totalRevenue.toFixed(2),
       roas: totalSpend > 0 ? +(totalRevenue / totalSpend).toFixed(2) : 0,
       cpa: totalConversions > 0 ? +(totalSpend / totalConversions).toFixed(2) : 0,
-      ctr: totalImpressions > 0 ? +((totalClicks / totalImpressions) * 100).toFixed(2) : 0,
+      ctr: totalImpressions > 0 ? +((totalInlineLinkClicks / totalImpressions) * 100).toFixed(2) : 0,
       cpm: totalImpressions > 0 ? +((totalSpend / totalImpressions) * 1000).toFixed(2) : 0,
       impressions: totalImpressions,
       clicks: totalClicks,
