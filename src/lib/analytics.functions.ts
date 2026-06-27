@@ -992,7 +992,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         time_increment: "1",
         action_attribution_windows: attributionWindows,
         fields:
-          "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,status",
+          "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,status,inline_link_clicks,inline_link_click_ctr",
         limit: "500",
       },
       token,
