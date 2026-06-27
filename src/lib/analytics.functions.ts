@@ -321,6 +321,7 @@ async function fetchMetaAdsReal(
     const spend = parseFloat(row.spend) || 0;
     const impressions = parseFloat(row.impressions) || 0;
     const clicks = parseFloat(row.clicks) || 0;
+    const inline_link_clicks = parseFloat(row.inline_link_clicks) || 0;
     const reach = parseFloat(row.reach) || 0;
 
     const acc =
@@ -341,6 +342,7 @@ async function fetchMetaAdsReal(
     acc.spend += spend;
     acc.impressions += impressions;
     acc.clicks += clicks;
+    acc.inline_link_clicks += inline_link_clicks;
     acc.reach = Math.max(acc.reach, reach); // reach is unique users; max é melhor proxy do que soma
     for (const a of (row.actions ?? []) as MetaAction[]) {
       const v = parseFloat(a.value) || 0;
