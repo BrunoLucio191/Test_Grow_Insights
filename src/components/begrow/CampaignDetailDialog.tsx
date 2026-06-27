@@ -23,7 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchCampaignDetail } from "@/lib/analytics.functions";
-import type { Campaign, DateRange } from "@/lib/analytics-types";
+import type { Campaign, DateRange, AttributionWindow } from "@/lib/analytics-types";
 
 const fmt = (n: number, opts: Intl.NumberFormatOptions = {}) =>
   new Intl.NumberFormat("pt-BR", opts).format(n);
@@ -34,9 +34,11 @@ type Props = {
   clientId: string;
   campaign: Campaign | null;
   range: DateRange;
+  attribution?: AttributionWindow;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 };
+
 
 function MiniStat({
   label,
