@@ -1001,11 +1001,12 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     // Pick dominant conversion type from aggregated actions across the campaign
     const actionsAgg = new Map<string, number>();
     const valuesAgg = new Map<string, number>();
-    let totSpend = 0, totImp = 0, totClicks = 0, totReach = 0;
+    let totSpend = 0, totImp = 0, totClicks = 0, totInlineClicks = 0, totReach = 0;
     for (const row of daily.data) {
       totSpend += parseFloat(row.spend) || 0;
       totImp += parseFloat(row.impressions) || 0;
       totClicks += parseFloat(row.clicks) || 0;
+      totInlineClicks += parseFloat(row.inline_link_clicks) || 0;
       totReach = Math.max(totReach, parseFloat(row.reach) || 0);
       for (const a of (row.actions ?? []) as MetaAction[]) {
         actionsAgg.set(a.action_type, (actionsAgg.get(a.action_type) ?? 0) + (parseFloat(a.value) || 0));
