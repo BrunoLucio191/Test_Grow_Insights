@@ -835,11 +835,12 @@ export const getCacheStatus = createServerFn({ method: "POST" })
     };
 
     return {
-      paid: build("paid"),
+      paid: build(paidScope),
       organic: build("organic"),
       ttlSeconds: CACHE_TTL_SECONDS,
     };
   });
+
 
 /* -------------------- Client admin: update IDs + test connection -------------------- */
 
