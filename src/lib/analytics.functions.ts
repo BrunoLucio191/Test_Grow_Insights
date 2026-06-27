@@ -431,6 +431,7 @@ async function fetchMetaAdsReal(
       clicks: c.clicks,
       objective: c.objective ?? meta.objective ?? "—",
       conversionType: convType,
+      inline_link_clicks: c.inline_link_clicks,
     };
   });
 
