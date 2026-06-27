@@ -82,7 +82,7 @@ export const listClients = createServerFn({ method: "GET" }).handler(
   async (): Promise<ClientRow[]> => {
     const { data, error } = await supabaseAdmin
       .from("clients")
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
       .order("name", { ascending: true });
     if (error) {
       console.error("listClients error:", error);
@@ -98,7 +98,7 @@ export const createClient = createServerFn({ method: "POST" })
     const { data: row, error } = await supabaseAdmin
       .from("clients")
       .insert({ name: data.name })
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
       .single();
     if (error) throw new Error(error.message);
     return row as ClientRow;
@@ -864,7 +864,7 @@ export const updateClient = createServerFn({ method: "POST" })
       .from("clients")
       .update(patch)
       .eq("id", data.clientId)
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
       .single();
     if (error) throw new Error(error.message);
     await invalidateCache(data.clientId);
@@ -1086,7 +1086,7 @@ export const testMetaConnection = createServerFn({ method: "POST" })
     const token = process.env.META_ACCESS_TOKEN;
     const { data: c, error } = await supabaseAdmin
       .from("clients")
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
       .eq("id", data.clientId)
       .single();
     if (error || !c) throw new Error("Cliente não encontrado");
