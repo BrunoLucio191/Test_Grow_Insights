@@ -1065,7 +1065,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
           level: "ad",
           action_attribution_windows: attributionWindows,
           fields:
-            "ad_id,ad_name,spend,impressions,clicks,ctr,actions,action_values",
+            "ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,inline_link_click_ctr,actions,action_values",
           limit: "200",
         },
         token,
