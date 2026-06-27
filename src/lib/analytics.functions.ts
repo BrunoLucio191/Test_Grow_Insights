@@ -844,6 +844,10 @@ const updateClientSchema = z.object({
   meta_page_id: z.string().trim().max(60).nullable().optional(),
   ig_account_id: z.string().trim().max(60).nullable().optional(),
   conversion_event: z.string().trim().max(80).nullable().optional(),
+  attribution_window: z
+    .enum(["7d_click,1d_view", "1d_click,1d_view", "7d_click", "1d_click"])
+    .nullable()
+    .optional(),
 });
 
 export const updateClient = createServerFn({ method: "POST" })
@@ -855,6 +859,7 @@ export const updateClient = createServerFn({ method: "POST" })
       meta_page_id?: string | null;
       ig_account_id?: string | null;
       conversion_event?: string | null;
+      attribution_window?: string | null;
       updated_at: string;
     } = { updated_at: new Date().toISOString() };
     if (data.name !== undefined) patch.name = data.name;
@@ -866,6 +871,8 @@ export const updateClient = createServerFn({ method: "POST" })
       patch.ig_account_id = data.ig_account_id || null;
     if (data.conversion_event !== undefined)
       patch.conversion_event = data.conversion_event || null;
+    if (data.attribution_window !== undefined)
+      patch.attribution_window = data.attribution_window || null;
 
     const { data: row, error } = await supabaseAdmin
       .from("clients")
@@ -877,6 +884,61 @@ export const updateClient = createServerFn({ method: "POST" })
     await invalidateCache(data.clientId);
     return row as ClientRow;
   });
+
+/* -------------------- Campaign Groups -------------------- */
+
+export const listCampaignGroups = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }): Promise<import("./analytics-types").CampaignGroup[]> => {
+    const { data: rows, error } = await supabaseAdmin
+      .from("campaign_groups")
+      .select("id, client_id, name, campaign_ids")
+      .eq("client_id", data.clientId)
+      .order("name", { ascending: true });
+    if (error) {
+      console.error("listCampaignGroups error:", error);
+      return [];
+    }
+    return (rows as import("./analytics-types").CampaignGroup[]) ?? [];
+  });
+
+export const upsertCampaignGroup = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        clientId: z.string().uuid(),
+        name: z.string().trim().min(1).max(120),
+        campaignIds: z.array(z.string().min(1)).min(1),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<import("./analytics-types").CampaignGroup> => {
+    const payload = {
+      client_id: data.clientId,
+      name: data.name,
+      campaign_ids: data.campaignIds,
+      updated_at: new Date().toISOString(),
+    };
+    const query = data.id
+      ? supabaseAdmin.from("campaign_groups").update(payload).eq("id", data.id)
+      : supabaseAdmin.from("campaign_groups").insert(payload);
+    const { data: row, error } = await query
+      .select("id, client_id, name, campaign_ids")
+      .single();
+    if (error) throw new Error(error.message);
+    return row as import("./analytics-types").CampaignGroup;
+  });
+
+export const deleteCampaignGroup = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { error } = await supabaseAdmin.from("campaign_groups").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+
 
 /* -------------------- Campaign detail (drill-down) -------------------- */
 
