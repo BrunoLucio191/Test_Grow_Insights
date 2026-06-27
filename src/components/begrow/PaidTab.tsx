@@ -131,6 +131,7 @@ function aggregateCampaigns(items: Campaign[], groupName: string, groupId: strin
   const results = items.reduce((s, c) => s + c.results, 0);
   const impressions = items.reduce((s, c) => s + c.impressions, 0);
   const clicks = items.reduce((s, c) => s + c.clicks, 0);
+  const inline_link_clicks = items.reduce((s, c) => s + (c.inline_link_clicks ?? c.clicks), 0);
   return {
     id: `group:${groupId}`,
     name: groupName,
@@ -141,12 +142,13 @@ function aggregateCampaigns(items: Campaign[], groupName: string, groupId: strin
     revenue: +revenue.toFixed(2),
     roas: spent > 0 ? +(revenue / spent).toFixed(2) : 0,
     cpa: results > 0 ? +(spent / results).toFixed(2) : 0,
-    ctr: impressions > 0 ? +((clicks / impressions) * 100).toFixed(2) : 0,
+    ctr: impressions > 0 ? +((inline_link_clicks / impressions) * 100).toFixed(2) : 0,
     cpm: impressions > 0 ? +((spent / impressions) * 1000).toFixed(2) : 0,
     impressions,
     clicks,
     objective: "Grupo",
     conversionType: items[0]?.conversionType ?? "—",
+    inline_link_clicks,
   };
 }
 
