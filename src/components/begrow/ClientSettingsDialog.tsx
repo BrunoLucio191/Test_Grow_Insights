@@ -95,8 +95,10 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
           meta_page_id: pageId.trim() || null,
           ig_account_id: igId.trim() || null,
           conversion_event: convEvent.trim() || null,
+          attribution_window: (attribution || null) as AttributionWindow | null,
         },
       }),
+
     onSuccess: () => {
       toast.success("Cliente atualizado");
       qc.invalidateQueries({ queryKey: ["clients"] });
