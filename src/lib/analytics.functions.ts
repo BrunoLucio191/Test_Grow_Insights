@@ -1046,12 +1046,13 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       revenue: +revenue.toFixed(2),
       roas: totSpend > 0 ? +(revenue / totSpend).toFixed(2) : 0,
       cpa: conversions > 0 ? +(totSpend / conversions).toFixed(2) : 0,
-      ctr: totImp > 0 ? +((totClicks / totImp) * 100).toFixed(2) : 0,
+      ctr: totImp > 0 ? +((totInlineClicks / totImp) * 100).toFixed(2) : 0,
       cpm: totImp > 0 ? +((totSpend / totImp) * 1000).toFixed(2) : 0,
       impressions: totImp,
       clicks: totClicks,
       objective: first.objective ?? "—",
       conversionType: convType,
+      inline_link_clicks: totInlineClicks,
     };
 
     // Ads (creative-level)
