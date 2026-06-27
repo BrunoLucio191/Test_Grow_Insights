@@ -43,6 +43,7 @@ export function mockPaid(clientId: string, range: DateRange): PaidData {
     const revenue = Math.round(spent * (1 + r() * 5));
     const impressions = Math.round(spent * (50 + r() * 200));
     const clicks = Math.round(impressions * (0.005 + r() * 0.04));
+    const inline_link_clicks = Math.round(clicks * (0.4 + r() * 0.5));
     return {
       id: `c-${clientId.slice(0, 4)}-${i}`,
       status: statuses[Math.floor(r() * statuses.length)],
@@ -53,12 +54,13 @@ export function mockPaid(clientId: string, range: DateRange): PaidData {
       revenue,
       roas: spent > 0 ? Number((revenue / spent).toFixed(2)) : 0,
       cpa: results > 0 ? Number((spent / results).toFixed(2)) : 0,
-      ctr: impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(2)) : 0,
+      ctr: impressions > 0 ? Number(((inline_link_clicks / impressions) * 100).toFixed(2)) : 0,
       cpm: impressions > 0 ? Number(((spent / impressions) * 1000).toFixed(2)) : 0,
       impressions,
       clicks,
       objective: objectives[Math.floor(r() * objectives.length)],
       conversionType: "purchase",
+      inline_link_clicks,
     };
   });
   const totalImpressions = campaigns.reduce((s, c) => s + c.impressions, 0);
