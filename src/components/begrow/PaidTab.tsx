@@ -484,7 +484,7 @@ export function PaidTab({
                 const id = entry.row.id;
                 const expanded = isGroup && expandedGroups.has(entry.group.id);
                 return (
-                  <>
+                  <Fragment key={id}>
                     <tr
                       key={id}
                       className="cursor-pointer border-b border-border/40 transition-colors hover:bg-muted/30"
