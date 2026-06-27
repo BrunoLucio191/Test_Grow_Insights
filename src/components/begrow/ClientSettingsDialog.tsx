@@ -69,6 +69,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
   const [pageId, setPageId] = useState("");
   const [igId, setIgId] = useState("");
   const [convEvent, setConvEvent] = useState("");
+  const [attribution, setAttribution] = useState<AttributionWindow | "">("");
   const [test, setTest] = useState<ConnectionTest | null>(null);
 
   useEffect(() => {
@@ -78,9 +79,11 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
       setPageId(client.meta_page_id ?? "");
       setIgId(client.ig_account_id ?? "");
       setConvEvent(client.conversion_event ?? "");
+      setAttribution((client.attribution_window as AttributionWindow) ?? "");
       setTest(null);
     }
   }, [client?.id, open]);
+
 
   const save = useMutation({
     mutationFn: () =>
