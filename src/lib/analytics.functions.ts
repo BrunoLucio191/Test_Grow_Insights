@@ -160,7 +160,7 @@ type Scope = "paid" | "organic";
 
 async function readCache<T>(
   clientId: string,
-  scope: Scope,
+  scope: string,
   range: { from: string; to: string },
   force: boolean,
 ): Promise<T | null> {
@@ -181,7 +181,7 @@ async function readCache<T>(
 
 async function writeCache(
   clientId: string,
-  scope: Scope,
+  scope: string,
   range: { from: string; to: string },
   payload: unknown,
 ): Promise<void> {
@@ -199,12 +199,13 @@ async function writeCache(
   if (error) console.error("writeCache error:", error);
 }
 
-async function invalidateCache(clientId: string, scope?: Scope) {
+async function invalidateCache(clientId: string, scope?: string) {
   let q = supabaseAdmin.from("meta_cache").delete().eq("client_id", clientId);
   if (scope) q = q.eq("scope", scope);
   const { error } = await q;
   if (error) console.error("invalidateCache error:", error);
 }
+
 
 /* -------------------- Meta Graph helpers -------------------- */
 
