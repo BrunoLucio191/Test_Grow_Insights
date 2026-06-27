@@ -761,8 +761,10 @@ async function syncScope(
   clientId: string,
   scope: Scope,
   range: { from: string; to: string },
+  attribution?: string | null,
 ): Promise<string> {
-  await invalidateCache(clientId, scope);
+  const sk = scope === "paid" ? scopeKey("paid", attribution) : "organic";
+  await invalidateCache(clientId, sk);
   if (USE_MOCKS) return new Date().toISOString();
   const { data: c } = await supabaseAdmin
     .from("clients")
@@ -773,10 +775,11 @@ async function syncScope(
   const row = c as ClientRow;
   if (scope === "paid") {
     if (isPlaceholder(row.meta_ad_account_id)) {
-      await writeCache(clientId, "paid", range, EMPTY_PAID);
+      await writeCache(clientId, sk, range, EMPTY_PAID);
     } else {
-      const paid = await fetchMetaAdsReal(row, range);
-      await writeCache(clientId, "paid", range, paid);
+      const attr = attribution ?? row.attribution_window ?? "7d_click,1d_view";
+      const paid = await fetchMetaAdsReal(row, range, attr);
+      await writeCache(clientId, sk, range, paid);
     }
   } else {
     if (isPlaceholder(row.meta_page_id) && isPlaceholder(row.ig_account_id)) {
@@ -792,9 +795,10 @@ async function syncScope(
 export const syncPaid = createServerFn({ method: "POST" })
   .inputValidator((d) => clientRangeSchema.parse(d))
   .handler(async ({ data }): Promise<{ ok: true; cachedAt: string }> => {
-    const cachedAt = await syncScope(data.clientId, "paid", data.range);
+    const cachedAt = await syncScope(data.clientId, "paid", data.range, data.attribution);
     return { ok: true, cachedAt };
   });
+
 
 export const syncOrganic = createServerFn({ method: "POST" })
   .inputValidator((d) => clientRangeSchema.parse(d))
