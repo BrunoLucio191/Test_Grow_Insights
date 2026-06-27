@@ -175,7 +175,30 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
               Sobrescreve o evento usado como "Resultados" da campanha. Deixe vazio para usar a detecção automática (purchase &gt; lead &gt; link_click).
             </p>
           </div>
+          <div className="space-y-1.5">
+            <Label>Janela de atribuição padrão</Label>
+            <Select
+              value={attribution || "default"}
+              onValueChange={(v) => setAttribution(v === "default" ? "" : (v as AttributionWindow))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="7d clique + 1d view (padrão Meta)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">7d clique + 1d view (padrão Meta)</SelectItem>
+                {ATTRIBUTION_OPTIONS.filter((o) => o.value !== "7d_click,1d_view").map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Pode ser sobrescrita temporariamente no dashboard.
+            </p>
+          </div>
         </div>
+
 
         {test && (
           <div className="space-y-2">
