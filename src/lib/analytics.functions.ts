@@ -823,7 +823,8 @@ export const getCacheStatus = createServerFn({ method: "POST" })
       .eq("range_from", data.range.from)
       .eq("range_to", data.range.to);
 
-    const build = (scope: Scope) => {
+    const paidScope = scopeKey("paid", data.attribution);
+    const build = (scope: string) => {
       const row = rows?.find((r) => r.scope === scope);
       if (!row) return { fetchedAt: null, expiresAt: null };
       const fetchedAt = row.fetched_at;
@@ -832,6 +833,7 @@ export const getCacheStatus = createServerFn({ method: "POST" })
       ).toISOString();
       return { fetchedAt, expiresAt };
     };
+
     return {
       paid: build("paid"),
       organic: build("organic"),
