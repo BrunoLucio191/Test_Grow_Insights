@@ -124,12 +124,15 @@ export function DashboardHeader({
   client,
   range,
   onRangeChange,
+  attribution,
+  onAttributionChange,
   onSync,
   onOpenSettings,
   syncing,
   syncProgress,
   cacheStatus,
 }: Props) {
+
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const from = new Date(range.from);
