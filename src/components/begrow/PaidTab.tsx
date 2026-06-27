@@ -550,7 +550,7 @@ export function PaidTab({
                           </td>
                         </tr>
                       ))}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
