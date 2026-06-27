@@ -1,13 +1,26 @@
 import { useEffect, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, RefreshCw, TrendingUp, Radio, Check, Clock, Settings, AlertTriangle } from "lucide-react";
+import { CalendarIcon, RefreshCw, TrendingUp, Radio, Check, Clock, Settings, AlertTriangle, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { validateClient, type DateRange, type ClientRow } from "@/lib/analytics-types";
+import {
+  validateClient,
+  ATTRIBUTION_OPTIONS,
+  type DateRange,
+  type ClientRow,
+  type AttributionWindow,
+} from "@/lib/analytics-types";
 import type { CacheStatus } from "@/lib/analytics.functions";
 
 export type SyncProgress = {
@@ -19,12 +32,15 @@ type Props = {
   client: ClientRow;
   range: DateRange;
   onRangeChange: (r: DateRange) => void;
+  attribution: AttributionWindow;
+  onAttributionChange: (a: AttributionWindow) => void;
   onSync: () => void;
   onOpenSettings: () => void;
   syncing?: boolean;
   syncProgress?: SyncProgress;
   cacheStatus?: CacheStatus | null;
 };
+
 
 function ScopePill({
   label,
@@ -108,12 +124,15 @@ export function DashboardHeader({
   client,
   range,
   onRangeChange,
+  attribution,
+  onAttributionChange,
   onSync,
   onOpenSettings,
   syncing,
   syncProgress,
   cacheStatus,
 }: Props) {
+
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const from = new Date(range.from);
@@ -171,12 +190,27 @@ export function DashboardHeader({
             </PopoverContent>
           </Popover>
 
+          <Select value={attribution} onValueChange={(v) => onAttributionChange(v as AttributionWindow)}>
+            <SelectTrigger className="w-[230px] gap-2">
+              <Target className="h-4 w-4 text-muted-foreground" />
+              <SelectValue placeholder="Atribuição" />
+            </SelectTrigger>
+            <SelectContent>
+              {ATTRIBUTION_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Button onClick={onSync} disabled={syncing} className="gap-2">
             <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
             Sincronizar dados
           </Button>
         </div>
       </div>
+
 
       <div className="flex flex-wrap items-center gap-4">
         <CacheLine

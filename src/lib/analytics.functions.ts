@@ -17,10 +17,29 @@ const dateRangeSchema = z.object({
   to: z.string(),
 });
 
+const attributionSchema = z
+  .enum(["7d_click,1d_view", "1d_click,1d_view", "7d_click", "1d_click"])
+  .optional()
+  .nullable();
+
 const clientRangeSchema = z.object({
   clientId: z.string().uuid(),
   range: dateRangeSchema,
+  attribution: attributionSchema,
 });
+
+function attrToArray(value: string | null | undefined): string[] {
+  if (!value) return ["7d_click", "1d_view"];
+  return value.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function scopeKey(base: "paid" | "organic", attribution?: string | null): string {
+  const attr = attribution ?? "7d_click,1d_view";
+  if (attr === "7d_click,1d_view") return base; // backward compatible
+  return `${base}:atr=${attr}`;
+}
+
+
 
 // Default: use real Meta API. Set USE_MOCKS=true to force synthetic data.
 const USE_MOCKS = (process.env.USE_MOCKS ?? "false") === "true";
@@ -63,7 +82,7 @@ export const listClients = createServerFn({ method: "GET" }).handler(
   async (): Promise<ClientRow[]> => {
     const { data, error } = await supabaseAdmin
       .from("clients")
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
       .order("name", { ascending: true });
     if (error) {
       console.error("listClients error:", error);
@@ -79,7 +98,7 @@ export const createClient = createServerFn({ method: "POST" })
     const { data: row, error } = await supabaseAdmin
       .from("clients")
       .insert({ name: data.name })
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
       .single();
     if (error) throw new Error(error.message);
     return row as ClientRow;
@@ -141,7 +160,7 @@ type Scope = "paid" | "organic";
 
 async function readCache<T>(
   clientId: string,
-  scope: Scope,
+  scope: string,
   range: { from: string; to: string },
   force: boolean,
 ): Promise<T | null> {
@@ -162,7 +181,7 @@ async function readCache<T>(
 
 async function writeCache(
   clientId: string,
-  scope: Scope,
+  scope: string,
   range: { from: string; to: string },
   payload: unknown,
 ): Promise<void> {
@@ -180,12 +199,13 @@ async function writeCache(
   if (error) console.error("writeCache error:", error);
 }
 
-async function invalidateCache(clientId: string, scope?: Scope) {
+async function invalidateCache(clientId: string, scope?: string) {
   let q = supabaseAdmin.from("meta_cache").delete().eq("client_id", clientId);
   if (scope) q = q.eq("scope", scope);
   const { error } = await q;
   if (error) console.error("invalidateCache error:", error);
 }
+
 
 /* -------------------- Meta Graph helpers -------------------- */
 
@@ -249,6 +269,7 @@ function pickConversionType(
 async function fetchMetaAdsReal(
   client: ClientRow,
   range: { from: string; to: string },
+  attributionOverride?: string | null,
 ): Promise<PaidData> {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) throw new Error("META_ACCESS_TOKEN not set");
@@ -260,8 +281,9 @@ async function fetchMetaAdsReal(
     : `act_${client.meta_ad_account_id}`;
 
   const timeRange = JSON.stringify({ since: range.from, until: range.to });
-  // Janela de atribuição padrão do Gerenciador
-  const attributionWindows = JSON.stringify(["7d_click", "1d_view"]);
+  const attrChoice = attributionOverride ?? client.attribution_window ?? "7d_click,1d_view";
+  const attributionWindows = JSON.stringify(attrToArray(attrChoice));
+
 
   // Single insights call: per-campaign per-day rows with raw actions/action_values.
   const insights = await graphGet<{ data: any[] }>(
@@ -440,23 +462,27 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<PaidData> => {
     if (USE_MOCKS) return mockPaid(data.clientId, data.range);
 
-    const cached = await readCache<PaidData>(data.clientId, "paid", data.range, false);
-    if (cached) return cached;
-
     const { data: client } = await supabaseAdmin
       .from("clients")
       .select("*")
       .eq("id", data.clientId)
       .single();
     if (!client) throw new Error("Cliente não encontrado");
-    if (isPlaceholder((client as ClientRow).meta_ad_account_id)) {
-      console.warn(`[paid] cliente "${(client as ClientRow).name}" sem meta_ad_account_id real (placeholder).`);
+    const c = client as ClientRow;
+    const attr = data.attribution ?? c.attribution_window ?? "7d_click,1d_view";
+    const sk = scopeKey("paid", attr);
+
+    const cached = await readCache<PaidData>(data.clientId, sk, data.range, false);
+    if (cached) return cached;
+
+    if (isPlaceholder(c.meta_ad_account_id)) {
+      console.warn(`[paid] cliente "${c.name}" sem meta_ad_account_id real (placeholder).`);
       return EMPTY_PAID;
     }
 
     try {
-      const fresh = await fetchMetaAdsReal(client as ClientRow, data.range);
-      await writeCache(data.clientId, "paid", data.range, fresh);
+      const fresh = await fetchMetaAdsReal(c, data.range, attr);
+      await writeCache(data.clientId, sk, data.range, fresh);
       return fresh;
     } catch (e) {
       console.error("fetchMetaAdsReal failed:", e);
@@ -465,7 +491,7 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
         .from("meta_cache")
         .select("payload")
         .eq("client_id", data.clientId)
-        .eq("scope", "paid")
+        .eq("scope", sk)
         .eq("range_from", data.range.from)
         .eq("range_to", data.range.to)
         .maybeSingle();
@@ -473,6 +499,7 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
       throw e;
     }
   });
+
 
 /* -------------------- Organic (FB + IG) -------------------- */
 
@@ -734,8 +761,10 @@ async function syncScope(
   clientId: string,
   scope: Scope,
   range: { from: string; to: string },
+  attribution?: string | null,
 ): Promise<string> {
-  await invalidateCache(clientId, scope);
+  const sk = scope === "paid" ? scopeKey("paid", attribution) : "organic";
+  await invalidateCache(clientId, sk);
   if (USE_MOCKS) return new Date().toISOString();
   const { data: c } = await supabaseAdmin
     .from("clients")
@@ -746,10 +775,11 @@ async function syncScope(
   const row = c as ClientRow;
   if (scope === "paid") {
     if (isPlaceholder(row.meta_ad_account_id)) {
-      await writeCache(clientId, "paid", range, EMPTY_PAID);
+      await writeCache(clientId, sk, range, EMPTY_PAID);
     } else {
-      const paid = await fetchMetaAdsReal(row, range);
-      await writeCache(clientId, "paid", range, paid);
+      const attr = attribution ?? row.attribution_window ?? "7d_click,1d_view";
+      const paid = await fetchMetaAdsReal(row, range, attr);
+      await writeCache(clientId, sk, range, paid);
     }
   } else {
     if (isPlaceholder(row.meta_page_id) && isPlaceholder(row.ig_account_id)) {
@@ -765,9 +795,10 @@ async function syncScope(
 export const syncPaid = createServerFn({ method: "POST" })
   .inputValidator((d) => clientRangeSchema.parse(d))
   .handler(async ({ data }): Promise<{ ok: true; cachedAt: string }> => {
-    const cachedAt = await syncScope(data.clientId, "paid", data.range);
+    const cachedAt = await syncScope(data.clientId, "paid", data.range, data.attribution);
     return { ok: true, cachedAt };
   });
+
 
 export const syncOrganic = createServerFn({ method: "POST" })
   .inputValidator((d) => clientRangeSchema.parse(d))
@@ -792,7 +823,8 @@ export const getCacheStatus = createServerFn({ method: "POST" })
       .eq("range_from", data.range.from)
       .eq("range_to", data.range.to);
 
-    const build = (scope: Scope) => {
+    const paidScope = scopeKey("paid", data.attribution);
+    const build = (scope: string) => {
       const row = rows?.find((r) => r.scope === scope);
       if (!row) return { fetchedAt: null, expiresAt: null };
       const fetchedAt = row.fetched_at;
@@ -801,12 +833,14 @@ export const getCacheStatus = createServerFn({ method: "POST" })
       ).toISOString();
       return { fetchedAt, expiresAt };
     };
+
     return {
-      paid: build("paid"),
+      paid: build(paidScope),
       organic: build("organic"),
       ttlSeconds: CACHE_TTL_SECONDS,
     };
   });
+
 
 /* -------------------- Client admin: update IDs + test connection -------------------- */
 
@@ -817,6 +851,10 @@ const updateClientSchema = z.object({
   meta_page_id: z.string().trim().max(60).nullable().optional(),
   ig_account_id: z.string().trim().max(60).nullable().optional(),
   conversion_event: z.string().trim().max(80).nullable().optional(),
+  attribution_window: z
+    .enum(["7d_click,1d_view", "1d_click,1d_view", "7d_click", "1d_click"])
+    .nullable()
+    .optional(),
 });
 
 export const updateClient = createServerFn({ method: "POST" })
@@ -828,6 +866,7 @@ export const updateClient = createServerFn({ method: "POST" })
       meta_page_id?: string | null;
       ig_account_id?: string | null;
       conversion_event?: string | null;
+      attribution_window?: string | null;
       updated_at: string;
     } = { updated_at: new Date().toISOString() };
     if (data.name !== undefined) patch.name = data.name;
@@ -839,17 +878,74 @@ export const updateClient = createServerFn({ method: "POST" })
       patch.ig_account_id = data.ig_account_id || null;
     if (data.conversion_event !== undefined)
       patch.conversion_event = data.conversion_event || null;
+    if (data.attribution_window !== undefined)
+      patch.attribution_window = data.attribution_window || null;
 
     const { data: row, error } = await supabaseAdmin
       .from("clients")
       .update(patch)
       .eq("id", data.clientId)
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
       .single();
     if (error) throw new Error(error.message);
     await invalidateCache(data.clientId);
     return row as ClientRow;
   });
+
+/* -------------------- Campaign Groups -------------------- */
+
+export const listCampaignGroups = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }): Promise<import("./analytics-types").CampaignGroup[]> => {
+    const { data: rows, error } = await supabaseAdmin
+      .from("campaign_groups")
+      .select("id, client_id, name, campaign_ids")
+      .eq("client_id", data.clientId)
+      .order("name", { ascending: true });
+    if (error) {
+      console.error("listCampaignGroups error:", error);
+      return [];
+    }
+    return (rows as import("./analytics-types").CampaignGroup[]) ?? [];
+  });
+
+export const upsertCampaignGroup = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        clientId: z.string().uuid(),
+        name: z.string().trim().min(1).max(120),
+        campaignIds: z.array(z.string().min(1)).min(1),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<import("./analytics-types").CampaignGroup> => {
+    const payload = {
+      client_id: data.clientId,
+      name: data.name,
+      campaign_ids: data.campaignIds,
+      updated_at: new Date().toISOString(),
+    };
+    const query = data.id
+      ? supabaseAdmin.from("campaign_groups").update(payload).eq("id", data.id)
+      : supabaseAdmin.from("campaign_groups").insert(payload);
+    const { data: row, error } = await query
+      .select("id, client_id, name, campaign_ids")
+      .single();
+    if (error) throw new Error(error.message);
+    return row as import("./analytics-types").CampaignGroup;
+  });
+
+export const deleteCampaignGroup = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { error } = await supabaseAdmin.from("campaign_groups").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+
 
 /* -------------------- Campaign detail (drill-down) -------------------- */
 
@@ -860,6 +956,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         clientId: z.string().uuid(),
         campaignId: z.string().min(1),
         range: dateRangeSchema,
+        attribution: attributionSchema,
       })
       .parse(d),
   )
@@ -876,7 +973,9 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     const client = c as ClientRow;
 
     const timeRange = JSON.stringify({ since: data.range.from, until: data.range.to });
-    const attributionWindows = JSON.stringify(["7d_click", "1d_view"]);
+    const attrChoice = data.attribution ?? client.attribution_window ?? "7d_click,1d_view";
+    const attributionWindows = JSON.stringify(attrToArray(attrChoice));
+
 
     // Daily timeseries for this campaign
     const daily = await graphGet<{ data: any[] }>(
@@ -1066,7 +1165,7 @@ export const testMetaConnection = createServerFn({ method: "POST" })
     const token = process.env.META_ACCESS_TOKEN;
     const { data: c, error } = await supabaseAdmin
       .from("clients")
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event")
+      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
       .eq("id", data.clientId)
       .single();
     if (error || !c) throw new Error("Cliente não encontrado");

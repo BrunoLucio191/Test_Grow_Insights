@@ -18,8 +18,9 @@ import { PaidTab } from "@/components/begrow/PaidTab";
 import { OrganicTab } from "@/components/begrow/OrganicTab";
 import { AiTab } from "@/components/begrow/AiTab";
 import { Toaster } from "@/components/ui/sonner";
-import { validateClient, type DateRange } from "@/lib/analytics-types";
+import { validateClient, DEFAULT_ATTRIBUTION, type DateRange, type AttributionWindow } from "@/lib/analytics-types";
 import { TrendingUp, Radio, Sparkles } from "lucide-react";
+
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -55,6 +56,7 @@ function Dashboard() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [range, setRange] = useState<DateRange>(defaultRange());
+  const [attribution, setAttribution] = useState<AttributionWindow>(DEFAULT_ATTRIBUTION);
   const [syncing, setSyncing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({
@@ -62,19 +64,30 @@ function Dashboard() {
     organic: "idle",
   });
 
+
   useEffect(() => {
     if (clients?.length && !selectedId) setSelectedId(clients[0].id);
   }, [clients, selectedId]);
 
   const selected = clients?.find((c) => c.id === selectedId) ?? null;
 
+  // Sync client's default attribution when changing client
+  useEffect(() => {
+    if (selected?.attribution_window) {
+      setAttribution(selected.attribution_window as AttributionWindow);
+    } else {
+      setAttribution(DEFAULT_ATTRIBUTION);
+    }
+  }, [selected?.id, selected?.attribution_window]);
+
   const { data: cacheStatus } = useQuery({
-    queryKey: ["cache-status", selectedId, range.from, range.to],
+    queryKey: ["cache-status", selectedId, range.from, range.to, attribution],
     queryFn: () =>
-      cacheStatusFn({ data: { clientId: selectedId!, range } }),
+      cacheStatusFn({ data: { clientId: selectedId!, range, attribution } }),
     enabled: !!selectedId,
     refetchInterval: 60_000,
   });
+
 
   const onSync = async () => {
     if (!selectedId || !selected) return;
@@ -98,7 +111,8 @@ function Dashboard() {
     });
 
     const runPaid = v.paidOk
-      ? syncPaidFn({ data: { clientId: selectedId, range } })
+      ? syncPaidFn({ data: { clientId: selectedId, range, attribution } })
+
           .then(() => {
             setSyncProgress((p) => ({ ...p, paid: "done" }));
             qc.invalidateQueries({ queryKey: ["paid", selectedId] });
@@ -158,6 +172,8 @@ function Dashboard() {
               client={selected}
               range={range}
               onRangeChange={setRange}
+              attribution={attribution}
+              onAttributionChange={setAttribution}
               onSync={onSync}
               onOpenSettings={() => setSettingsOpen(true)}
               syncing={syncing}
@@ -184,7 +200,7 @@ function Dashboard() {
                 </TabsList>
 
                 <TabsContent value="paid">
-                  <PaidTab clientId={selected.id} range={range} />
+                  <PaidTab clientId={selected.id} clientName={selected.name} range={range} attribution={attribution} />
                 </TabsContent>
                 <TabsContent value="organic">
                   <OrganicTab clientId={selected.id} range={range} />
@@ -195,6 +211,7 @@ function Dashboard() {
               </Tabs>
             </div>
           </>
+
         )}
       </main>
     </div>

@@ -14,8 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      campaign_groups: {
+        Row: {
+          campaign_ids: string[]
+          client_id: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_ids?: string[]
+          client_id: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_ids?: string[]
+          client_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_groups_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
+          attribution_window: string | null
           conversion_event: string | null
           created_at: string
           id: string
@@ -26,6 +62,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          attribution_window?: string | null
           conversion_event?: string | null
           created_at?: string
           id?: string
@@ -36,6 +73,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          attribution_window?: string | null
           conversion_event?: string | null
           created_at?: string
           id?: string

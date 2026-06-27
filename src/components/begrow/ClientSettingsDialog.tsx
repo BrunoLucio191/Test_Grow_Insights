@@ -21,7 +21,15 @@ import {
   type ConnectionTest,
   type ConnectionCheck,
 } from "@/lib/analytics.functions";
-import type { ClientRow } from "@/lib/analytics-types";
+import { ATTRIBUTION_OPTIONS, type ClientRow, type AttributionWindow } from "@/lib/analytics-types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 
 type Props = {
   client: ClientRow | null;
@@ -61,6 +69,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
   const [pageId, setPageId] = useState("");
   const [igId, setIgId] = useState("");
   const [convEvent, setConvEvent] = useState("");
+  const [attribution, setAttribution] = useState<AttributionWindow | "">("");
   const [test, setTest] = useState<ConnectionTest | null>(null);
 
   useEffect(() => {
@@ -70,9 +79,11 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
       setPageId(client.meta_page_id ?? "");
       setIgId(client.ig_account_id ?? "");
       setConvEvent(client.conversion_event ?? "");
+      setAttribution((client.attribution_window as AttributionWindow) ?? "");
       setTest(null);
     }
   }, [client?.id, open]);
+
 
   const save = useMutation({
     mutationFn: () =>
@@ -84,8 +95,10 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
           meta_page_id: pageId.trim() || null,
           ig_account_id: igId.trim() || null,
           conversion_event: convEvent.trim() || null,
+          attribution_window: (attribution || null) as AttributionWindow | null,
         },
       }),
+
     onSuccess: () => {
       toast.success("Cliente atualizado");
       qc.invalidateQueries({ queryKey: ["clients"] });
@@ -162,7 +175,30 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
               Sobrescreve o evento usado como "Resultados" da campanha. Deixe vazio para usar a detecção automática (purchase &gt; lead &gt; link_click).
             </p>
           </div>
+          <div className="space-y-1.5">
+            <Label>Janela de atribuição padrão</Label>
+            <Select
+              value={attribution || "default"}
+              onValueChange={(v) => setAttribution(v === "default" ? "" : (v as AttributionWindow))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="7d clique + 1d view (padrão Meta)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">7d clique + 1d view (padrão Meta)</SelectItem>
+                {ATTRIBUTION_OPTIONS.filter((o) => o.value !== "7d_click,1d_view").map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Pode ser sobrescrita temporariamente no dashboard.
+            </p>
+          </div>
         </div>
+
 
         {test && (
           <div className="space-y-2">

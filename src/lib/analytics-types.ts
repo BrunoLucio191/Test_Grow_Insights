@@ -100,6 +100,21 @@ export type OrganicData = {
   topPosts: TopPost[];
 };
 
+export type AttributionWindow =
+  | "7d_click,1d_view"
+  | "1d_click,1d_view"
+  | "7d_click"
+  | "1d_click";
+
+export const ATTRIBUTION_OPTIONS: { value: AttributionWindow; label: string }[] = [
+  { value: "7d_click,1d_view", label: "7d clique + 1d view (padrão Meta)" },
+  { value: "1d_click,1d_view", label: "1d clique + 1d view" },
+  { value: "7d_click", label: "7d clique apenas" },
+  { value: "1d_click", label: "1d clique apenas" },
+];
+
+export const DEFAULT_ATTRIBUTION: AttributionWindow = "7d_click,1d_view";
+
 export type ClientRow = {
   id: string;
   name: string;
@@ -107,7 +122,16 @@ export type ClientRow = {
   meta_page_id: string | null;
   ig_account_id: string | null;
   conversion_event?: string | null;
+  attribution_window?: AttributionWindow | null;
 };
+
+export type CampaignGroup = {
+  id: string;
+  client_id: string;
+  name: string;
+  campaign_ids: string[];
+};
+
 
 // Detect seed/placeholder IDs used in local/demo clients so we don't hit Meta with fake IDs.
 const PLACEHOLDER_RE = /^(?:act_0{6,}\d{1,3}|0+\d{0,3}|10{6,}\d{1,3}|170{6,}\d{1,3})$/;
