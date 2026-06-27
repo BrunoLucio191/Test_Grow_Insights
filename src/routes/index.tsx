@@ -111,7 +111,8 @@ function Dashboard() {
     });
 
     const runPaid = v.paidOk
-      ? syncPaidFn({ data: { clientId: selectedId, range } })
+      ? syncPaidFn({ data: { clientId: selectedId, range, attribution } })
+
           .then(() => {
             setSyncProgress((p) => ({ ...p, paid: "done" }));
             qc.invalidateQueries({ queryKey: ["paid", selectedId] });
