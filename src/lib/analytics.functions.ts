@@ -307,6 +307,7 @@ async function fetchMetaAdsReal(
     spend: number;
     impressions: number;
     clicks: number;
+    inline_link_clicks: number;
     reach: number;
     actionsAgg: Map<string, number>;
     valuesAgg: Map<string, number>;
