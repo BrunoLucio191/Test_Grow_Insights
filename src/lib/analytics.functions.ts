@@ -1074,6 +1074,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         const spend = parseFloat(r.spend) || 0;
         const impressions = parseFloat(r.impressions) || 0;
         const clicks = parseFloat(r.clicks) || 0;
+        const inline_link_clicks = parseFloat(r.inline_link_clicks) || 0;
         const results = extractMetaActionValue(r.actions, convType);
         const rev = extractMetaActionValue(r.action_values, convType);
         ads.push({
@@ -1082,11 +1083,12 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
           spend: +spend.toFixed(2),
           impressions,
           clicks,
-          ctr: impressions > 0 ? +((clicks / impressions) * 100).toFixed(2) : 0,
+          ctr: impressions > 0 ? +((inline_link_clicks / impressions) * 100).toFixed(2) : 0,
           results: +results.toFixed(0),
           revenue: +rev.toFixed(2),
           cpa: results > 0 ? +(spend / results).toFixed(2) : 0,
           roas: spend > 0 ? +(rev / spend).toFixed(2) : 0,
+          inline_link_clicks,
         });
       }
     } catch (e) {
