@@ -18,8 +18,9 @@ import { PaidTab } from "@/components/begrow/PaidTab";
 import { OrganicTab } from "@/components/begrow/OrganicTab";
 import { AiTab } from "@/components/begrow/AiTab";
 import { Toaster } from "@/components/ui/sonner";
-import { validateClient, type DateRange } from "@/lib/analytics-types";
+import { validateClient, DEFAULT_ATTRIBUTION, type DateRange, type AttributionWindow } from "@/lib/analytics-types";
 import { TrendingUp, Radio, Sparkles } from "lucide-react";
+
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
