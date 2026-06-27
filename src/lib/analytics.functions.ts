@@ -269,6 +269,7 @@ function pickConversionType(
 async function fetchMetaAdsReal(
   client: ClientRow,
   range: { from: string; to: string },
+  attributionOverride?: string | null,
 ): Promise<PaidData> {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) throw new Error("META_ACCESS_TOKEN not set");
@@ -280,8 +281,9 @@ async function fetchMetaAdsReal(
     : `act_${client.meta_ad_account_id}`;
 
   const timeRange = JSON.stringify({ since: range.from, until: range.to });
-  // Janela de atribuição padrão do Gerenciador
-  const attributionWindows = JSON.stringify(["7d_click", "1d_view"]);
+  const attrChoice = attributionOverride ?? client.attribution_window ?? "7d_click,1d_view";
+  const attributionWindows = JSON.stringify(attrToArray(attrChoice));
+
 
   // Single insights call: per-campaign per-day rows with raw actions/action_values.
   const insights = await graphGet<{ data: any[] }>(
