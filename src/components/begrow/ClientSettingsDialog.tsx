@@ -21,7 +21,15 @@ import {
   type ConnectionTest,
   type ConnectionCheck,
 } from "@/lib/analytics.functions";
-import type { ClientRow } from "@/lib/analytics-types";
+import { ATTRIBUTION_OPTIONS, type ClientRow, type AttributionWindow } from "@/lib/analytics-types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 
 type Props = {
   client: ClientRow | null;
