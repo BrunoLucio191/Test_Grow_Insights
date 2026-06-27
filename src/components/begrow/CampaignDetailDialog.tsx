@@ -29,7 +29,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Skeleton } from "@/components/ui/skeleton";
 import { fetchCampaignDetail } from "@/lib/analytics.functions";
 import type { Campaign, DateRange, AttributionWindow } from "@/lib/analytics-types";
 
@@ -133,7 +132,6 @@ export function CampaignDetailDialog({ clientId, campaign, range, attribution, o
     retry: 1,
   });
 
-  const prefKey = campaign?.id ?? "default";
   const [visibleStats, setVisibleStats] = useState<StatKey[]>(() => loadPref(`campaign-detail:stats:${clientId}`, DEFAULT_STATS));
   const [visibleSections, setVisibleSections] = useState<SectionKey[]>(() => loadPref(`campaign-detail:sections:${clientId}`, DEFAULT_SECTIONS));
   const [visibleAdCols, setVisibleAdCols] = useState<AdColKey[]>(() => loadPref(`campaign-detail:ads:${clientId}`, DEFAULT_AD_COLS));
