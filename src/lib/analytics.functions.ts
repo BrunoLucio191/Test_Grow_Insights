@@ -984,7 +984,14 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     const attributionWindows = JSON.stringify(attrToArray(attrChoice));
 
 
-    // Daily timeseries for this campaign
+    const meta = await graphGet<any>(
+      `/${data.campaignId}`,
+      { fields: "id,name,status,daily_budget,lifetime_budget,objective" },
+      token,
+    );
+
+    // Daily timeseries for this campaign. `status` is not a valid Ads Insights field;
+    // status/budget metadata comes from the campaign object above.
     const daily = await graphGet<{ data: any[] }>(
       `/${data.campaignId}/insights`,
       {
@@ -992,7 +999,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         time_increment: "1",
         action_attribution_windows: attributionWindows,
         fields:
-          "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,status,inline_link_clicks,inline_link_click_ctr",
+          "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,inline_link_clicks,inline_link_click_ctr",
         limit: "500",
       },
       token,
@@ -1038,9 +1045,9 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     const first = daily.data[0] ?? {};
     const campaign: Campaign = {
       id: data.campaignId,
-      name: first.campaign_name ?? data.campaignId,
-      status: (first.status as Campaign["status"]) ?? "ACTIVE",
-      budget: 0,
+      name: first.campaign_name ?? meta.name ?? data.campaignId,
+      status: (meta.status as Campaign["status"]) ?? "ACTIVE",
+      budget: Number(meta.daily_budget || meta.lifetime_budget || 0) / 100,
       spent: +totSpend.toFixed(2),
       results: +conversions.toFixed(0),
       revenue: +revenue.toFixed(2),
@@ -1050,7 +1057,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       cpm: totImp > 0 ? +((totSpend / totImp) * 1000).toFixed(2) : 0,
       impressions: totImp,
       clicks: totClicks,
-      objective: first.objective ?? "—",
+      objective: first.objective ?? meta.objective ?? "—",
       conversionType: convType,
       inline_link_clicks: totInlineClicks,
     };

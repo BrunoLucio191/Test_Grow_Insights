@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -12,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Loader2, Target, DollarSign, MousePointerClick, Eye, Repeat, TrendingUp } from "lucide-react";
+import { BarChart3, Columns3, Loader2, Target, DollarSign, MousePointerClick, Eye, Repeat, TrendingUp } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchCampaignDetail } from "@/lib/analytics.functions";
 import type { Campaign, DateRange, AttributionWindow } from "@/lib/analytics-types";
@@ -38,6 +46,62 @@ type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
 };
+
+type StatKey = "spend" | "revenue" | "roas" | "results" | "cpa" | "clicks" | "ctr" | "cpm" | "impressions" | "budget";
+type SectionKey = "chart" | "ads" | "breakdowns" | "summary";
+type AdColKey = "name" | "spend" | "results" | "cpa" | "roas" | "ctr" | "impressions" | "clicks";
+
+const STAT_DEFS: { key: StatKey; label: string; icon: React.ComponentType<{ className?: string }>; render: (c: Campaign) => string }[] = [
+  { key: "spend", label: "Gasto", icon: DollarSign, render: (c) => brl(c.spent) },
+  { key: "revenue", label: "Receita", icon: TrendingUp, render: (c) => brl(c.revenue) },
+  { key: "roas", label: "ROAS", icon: TrendingUp, render: (c) => `${fmt(c.roas, { maximumFractionDigits: 2 })}x` },
+  { key: "results", label: "Resultados", icon: Target, render: (c) => fmt(c.results) },
+  { key: "cpa", label: "CPA", icon: Target, render: (c) => (c.cpa > 0 ? brl(c.cpa) : "—") },
+  { key: "clicks", label: "Cliques", icon: MousePointerClick, render: (c) => fmt(c.clicks) },
+  { key: "ctr", label: "CTR link", icon: MousePointerClick, render: (c) => pct(c.ctr) },
+  { key: "cpm", label: "CPM", icon: Eye, render: (c) => (c.cpm > 0 ? brl(c.cpm) : "—") },
+  { key: "impressions", label: "Impressões", icon: Eye, render: (c) => fmt(c.impressions) },
+  { key: "budget", label: "Budget", icon: DollarSign, render: (c) => (c.budget > 0 ? brl(c.budget) : "—") },
+];
+
+const SECTION_DEFS: { key: SectionKey; label: string }[] = [
+  { key: "summary", label: "Resumo acionável" },
+  { key: "chart", label: "Evolução diária" },
+  { key: "ads", label: "Tabela de anúncios" },
+  { key: "breakdowns", label: "Quebras" },
+];
+
+const AD_COL_DEFS: { key: AdColKey; label: string; align?: "right" }[] = [
+  { key: "name", label: "Anúncio" },
+  { key: "spend", label: "Gasto", align: "right" },
+  { key: "results", label: "Result.", align: "right" },
+  { key: "cpa", label: "CPA", align: "right" },
+  { key: "roas", label: "ROAS", align: "right" },
+  { key: "ctr", label: "CTR", align: "right" },
+  { key: "impressions", label: "Impressões", align: "right" },
+  { key: "clicks", label: "Cliques", align: "right" },
+];
+
+const DEFAULT_STATS: StatKey[] = ["spend", "revenue", "roas", "results", "cpa", "clicks", "ctr"];
+const DEFAULT_SECTIONS: SectionKey[] = ["summary", "chart", "ads", "breakdowns"];
+const DEFAULT_AD_COLS: AdColKey[] = ["name", "spend", "results", "cpa", "roas", "ctr"];
+
+function loadPref<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function savePref<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
 
 
 function MiniStat({
@@ -62,61 +126,171 @@ function MiniStat({
 
 export function CampaignDetailDialog({ clientId, campaign, range, attribution, open, onOpenChange }: Props) {
   const fn = useServerFn(fetchCampaignDetail);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["campaign-detail", clientId, campaign?.id, range.from, range.to, attribution],
     queryFn: () => fn({ data: { clientId, campaignId: campaign!.id, range, attribution } }),
     enabled: open && !!campaign && !campaign.id.startsWith("group:"),
+    retry: 1,
   });
+
+  const prefKey = campaign?.id ?? "default";
+  const [visibleStats, setVisibleStats] = useState<StatKey[]>(() => loadPref(`campaign-detail:stats:${clientId}`, DEFAULT_STATS));
+  const [visibleSections, setVisibleSections] = useState<SectionKey[]>(() => loadPref(`campaign-detail:sections:${clientId}`, DEFAULT_SECTIONS));
+  const [visibleAdCols, setVisibleAdCols] = useState<AdColKey[]>(() => loadPref(`campaign-detail:ads:${clientId}`, DEFAULT_AD_COLS));
+
+  const shownStats = STAT_DEFS.filter((s) => visibleStats.includes(s.key));
+  const shownAdCols = AD_COL_DEFS.filter((c) => visibleAdCols.includes(c.key));
+  const currentCampaign = data?.campaign ?? campaign;
+
+  const toggleList = <T extends string,>(value: T, list: T[], setList: (next: T[]) => void, storageKey: string) => {
+    const next = list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
+    setList(next);
+    savePref(storageKey, next);
+  };
+
+  const summary = useMemo(() => {
+    if (!data) return [];
+    const items: string[] = [];
+    if (data.campaign.roas >= 2) items.push(`ROAS saudável (${fmt(data.campaign.roas, { maximumFractionDigits: 2 })}x), priorize escala gradual mantendo CPA controlado.`);
+    else if (data.campaign.spent > 0) items.push(`ROAS abaixo do ideal (${fmt(data.campaign.roas, { maximumFractionDigits: 2 })}x), revise criativos, público e evento de conversão antes de escalar.`);
+    if (data.campaign.ctr < 1 && data.campaign.impressions > 0) items.push(`CTR de link baixo (${pct(data.campaign.ctr)}): teste gancho inicial, oferta e chamada para ação.`);
+    if (data.campaign.cpa > 0) items.push(`CPA atual em ${brl(data.campaign.cpa)} para ${fmt(data.campaign.results)} resultados no período.`);
+    const bestAd = data.ads.slice().sort((a, b) => b.roas - a.roas || b.results - a.results)[0];
+    if (bestAd) items.push(`Melhor anúncio por eficiência: ${bestAd.name} (${bestAd.roas > 0 ? `${fmt(bestAd.roas, { maximumFractionDigits: 2 })}x ROAS` : `${fmt(bestAd.results)} resultados`}).`);
+    return items;
+  }, [data]);
+
+  const renderAdCell = (ad: NonNullable<typeof data>["ads"][number], key: AdColKey) => {
+    switch (key) {
+      case "name": return <span className="font-medium">{ad.name}</span>;
+      case "spend": return brl(ad.spend);
+      case "results": return fmt(ad.results);
+      case "cpa": return ad.cpa > 0 ? brl(ad.cpa) : "—";
+      case "roas": return ad.roas > 0 ? `${fmt(ad.roas, { maximumFractionDigits: 2 })}x` : "—";
+      case "ctr": return pct(ad.ctr);
+      case "impressions": return fmt(ad.impressions);
+      case "clicks": return fmt(ad.clicks);
+    }
+  };
 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {campaign?.name ?? "Campanha"}
-            {campaign && (
+          <div className="flex flex-wrap items-start justify-between gap-3 pr-8">
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+            {currentCampaign?.name ?? "Campanha"}
+            {currentCampaign && (
               <Badge
                 variant="outline"
                 className={
-                  campaign.status === "ACTIVE"
+                  currentCampaign.status === "ACTIVE"
                     ? "border-[color:var(--success)]/40 bg-[color:var(--success)]/10 text-[color:var(--success)]"
-                    : campaign.status === "PAUSED"
+                    : currentCampaign.status === "PAUSED"
                       ? "border-[color:var(--warning)]/40 bg-[color:var(--warning)]/10 text-[color:var(--warning)]"
                       : "border-border bg-muted text-muted-foreground"
                 }
               >
-                {campaign.status}
+                {currentCampaign.status}
               </Badge>
             )}
-          </DialogTitle>
-          <DialogDescription>
-            {campaign?.objective ?? ""} · Conversão usada:{" "}
+              </DialogTitle>
+              <DialogDescription>
+            {currentCampaign?.objective ?? ""} · Conversão usada:{" "}
             <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
-              {data?.campaign.conversionType ?? campaign?.conversionType ?? "—"}
+              {data?.campaign.conversionType ?? currentCampaign?.conversionType ?? "—"}
             </code>
           </DialogDescription>
+            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Columns3 className="h-4 w-4" /> Visualização
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80">
+                <div className="space-y-4">
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">KPIs</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {STAT_DEFS.map((s) => (
+                        <label key={s.key} className="flex items-center gap-2 text-xs">
+                          <Checkbox checked={visibleStats.includes(s.key)} onCheckedChange={() => toggleList(s.key, visibleStats, setVisibleStats, `campaign-detail:stats:${clientId}`)} />
+                          {s.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Seções</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SECTION_DEFS.map((s) => (
+                        <label key={s.key} className="flex items-center gap-2 text-xs">
+                          <Checkbox checked={visibleSections.includes(s.key)} onCheckedChange={() => toggleList(s.key, visibleSections, setVisibleSections, `campaign-detail:sections:${clientId}`)} />
+                          {s.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Colunas dos anúncios</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {AD_COL_DEFS.map((c) => (
+                        <label key={c.key} className="flex items-center gap-2 text-xs">
+                          <Checkbox checked={visibleAdCols.includes(c.key)} onCheckedChange={() => toggleList(c.key, visibleAdCols, setVisibleAdCols, `campaign-detail:ads:${clientId}`)} />
+                          {c.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         </DialogHeader>
 
-        {isLoading || !data ? (
+        {isLoading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando detalhes…
+          </div>
+        ) : isError || !data ? (
+          <div className="space-y-4 rounded-lg border border-border/60 bg-background/40 p-6">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <BarChart3 className="h-4 w-4 text-primary" /> Não foi possível carregar os detalhes completos
+            </div>
+            <p className="text-sm text-muted-foreground">
+              A campanha abriu com os dados já carregados na tabela. Tente atualizar o período ou verificar o acesso do ativo caso precise das quebras por anúncio/dispositivo.
+            </p>
+            {error instanceof Error && <p className="text-xs text-muted-foreground">{error.message}</p>}
+            {currentCampaign && (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {shownStats.map((s) => <MiniStat key={s.key} label={s.label} value={s.render(currentCampaign)} icon={s.icon} />)}
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
             {/* KPIs */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-              <MiniStat label="Gasto" value={brl(data.campaign.spent)} icon={DollarSign} />
-              <MiniStat label="Receita" value={brl(data.campaign.revenue)} icon={TrendingUp} />
-              <MiniStat label="ROAS" value={`${fmt(data.campaign.roas, { maximumFractionDigits: 2 })}x`} icon={TrendingUp} />
-              <MiniStat label="Resultados" value={fmt(data.campaign.results)} icon={Target} />
-              <MiniStat label="CPA" value={data.campaign.cpa > 0 ? brl(data.campaign.cpa) : "—"} icon={Target} />
-              <MiniStat label="Cliques" value={fmt(data.campaign.clicks)} icon={MousePointerClick} />
-              <MiniStat label="CTR" value={pct(data.campaign.ctr)} icon={MousePointerClick} />
+              {shownStats.map((s) => <MiniStat key={s.key} label={s.label} value={s.render(data.campaign)} icon={s.icon} />)}
             </div>
 
+            {visibleSections.includes("summary") && summary.length > 0 && (
+              <div className="rounded-lg border border-border/60 bg-background/40 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <Target className="h-4 w-4 text-primary" />
+                  <h4 className="text-sm font-semibold">Resumo acionável</h4>
+                </div>
+                <ul className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+                  {summary.map((item) => <li key={item} className="rounded-md bg-muted/30 p-3">{item}</li>)}
+                </ul>
+              </div>
+            )}
+
             {/* Timeseries */}
-            <div className="rounded-lg border border-border/60 bg-background/40 p-4">
+            {visibleSections.includes("chart") && <div className="rounded-lg border border-border/60 bg-background/40 p-4">
               <div className="mb-2 flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-primary" />
                 <h4 className="text-sm font-semibold">Evolução diária</h4>
@@ -142,10 +316,10 @@ export function CampaignDetailDialog({ clientId, campaign, range, attribution, o
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </div>}
 
             {/* Ads */}
-            {data.ads.length > 0 && (
+            {visibleSections.includes("ads") && data.ads.length > 0 && (
               <div className="rounded-lg border border-border/60 bg-background/40">
                 <div className="border-b border-border/60 p-4 pb-2">
                   <h4 className="text-sm font-semibold">Anúncios ({data.ads.length})</h4>
@@ -154,12 +328,9 @@ export function CampaignDetailDialog({ clientId, campaign, range, attribution, o
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-border/60 text-left uppercase tracking-wider text-muted-foreground">
-                        <th className="px-3 py-2 font-medium">Anúncio</th>
-                        <th className="px-3 py-2 text-right font-medium">Gasto</th>
-                        <th className="px-3 py-2 text-right font-medium">Result.</th>
-                        <th className="px-3 py-2 text-right font-medium">CPA</th>
-                        <th className="px-3 py-2 text-right font-medium">ROAS</th>
-                        <th className="px-3 py-2 text-right font-medium">CTR</th>
+                        {shownAdCols.map((c) => (
+                          <th key={c.key} className={`px-3 py-2 font-medium ${c.align === "right" ? "text-right" : ""}`}>{c.label}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -168,12 +339,9 @@ export function CampaignDetailDialog({ clientId, campaign, range, attribution, o
                         .sort((a, b) => b.spend - a.spend)
                         .map((a) => (
                           <tr key={a.id} className="border-b border-border/40 last:border-0">
-                            <td className="px-3 py-2 font-medium">{a.name}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{brl(a.spend)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{fmt(a.results)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{a.cpa > 0 ? brl(a.cpa) : "—"}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{a.roas > 0 ? `${fmt(a.roas, { maximumFractionDigits: 2 })}x` : "—"}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{pct(a.ctr)}</td>
+                            {shownAdCols.map((c) => (
+                              <td key={c.key} className={`px-3 py-2 ${c.align === "right" ? "text-right tabular-nums" : ""}`}>{renderAdCell(a, c.key)}</td>
+                            ))}
                           </tr>
                         ))}
                     </tbody>
@@ -183,10 +351,10 @@ export function CampaignDetailDialog({ clientId, campaign, range, attribution, o
             )}
 
             {/* Breakdowns */}
-            <div className="grid gap-4 md:grid-cols-2">
+            {visibleSections.includes("breakdowns") && <div className="grid gap-4 md:grid-cols-2">
               <BreakdownCard title="Idade · Gênero" icon={<Eye className="h-4 w-4" />} rows={data.ageGender} />
               <BreakdownCard title="Dispositivo" icon={<Repeat className="h-4 w-4" />} rows={data.device} />
-            </div>
+            </div>}
           </div>
         )}
       </DialogContent>
