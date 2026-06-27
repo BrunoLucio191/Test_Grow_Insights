@@ -331,6 +331,7 @@ async function fetchMetaAdsReal(
         spend: 0,
         impressions: 0,
         clicks: 0,
+        inline_link_clicks: 0,
         reach: 0,
         actionsAgg: new Map(),
         valuesAgg: new Map(),
