@@ -294,7 +294,7 @@ async function fetchMetaAdsReal(
       level: "campaign",
       action_attribution_windows: attributionWindows,
       fields:
-        "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective",
+        "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,inline_link_clicks,inline_link_click_ctr",
       limit: "500",
     },
     token,
