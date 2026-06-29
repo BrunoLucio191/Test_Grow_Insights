@@ -37,6 +37,17 @@ function attrToArray(value: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Generates a unique cache key for database storage (meta_cache).
+ * * - If the attribution is the default ("7d_click,1d_view"), it returns only
+ * the base name ("paid" or "organic") for backward compatibility.
+ * - Otherwise, it appends the attribution suffix to ensure that data
+ * with different conversion windows is stored in distinct cache records.
+ * * @param base - The data scope (paid or organic).
+ * @param attribution - The optional attribution window configuration.
+ * @returns A formatted string to be used as a cache key.
+ */
+
 function scopeKey(base: "paid" | "organic", attribution?: string | null): string {
   const attr = attribution ?? "7d_click,1d_view";
   if (attr === "7d_click,1d_view") return base; // backward compatible
