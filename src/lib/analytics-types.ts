@@ -102,11 +102,7 @@ export type OrganicData = {
   topPosts: TopPost[];
 };
 
-export type AttributionWindow =
-  | "7d_click,1d_view"
-  | "1d_click,1d_view"
-  | "7d_click"
-  | "1d_click";
+export type AttributionWindow = "7d_click,1d_view" | "1d_click,1d_view" | "7d_click" | "1d_click";
 
 export const ATTRIBUTION_OPTIONS: { value: AttributionWindow; label: string }[] = [
   { value: "7d_click,1d_view", label: "7d clique + 1d view (padrão Meta)" },
@@ -133,7 +129,6 @@ export type CampaignGroup = {
   name: string;
   campaign_ids: string[];
 };
-
 
 // Detect seed/placeholder IDs used in local/demo clients so we don't hit Meta with fake IDs.
 const PLACEHOLDER_RE = /^(?:act_0{6,}\d{1,3}|0+\d{0,3}|10{6,}\d{1,3}|170{6,}\d{1,3})$/;

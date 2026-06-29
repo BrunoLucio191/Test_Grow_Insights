@@ -124,6 +124,7 @@ export const deleteClient = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+//TODO: arrumar isso para que o token seja salvo no banco de dados
 export const importMetaAccounts = createServerFn({ method: "POST" }).handler(
   async (): Promise<{ imported: number; total: number; skipped: number }> => {
     const token = process.env.META_ACCESS_TOKEN;
