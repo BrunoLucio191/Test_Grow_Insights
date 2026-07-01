@@ -101,7 +101,7 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
   };
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+    <aside className="hidden w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex items-center gap-2 px-5 py-5">
         <div
           className="flex h-9 w-9 items-center justify-center rounded-lg"

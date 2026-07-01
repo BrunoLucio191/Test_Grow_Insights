@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, RefreshCw, TrendingUp, Radio, Check, Clock, Settings, AlertTriangle, Target } from "lucide-react";
+import {
+  CalendarIcon,
+  RefreshCw,
+  TrendingUp,
+  Radio,
+  Check,
+  Clock,
+  Settings,
+  AlertTriangle,
+  Target,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -41,7 +51,6 @@ type Props = {
   cacheStatus?: CacheStatus | null;
 };
 
-
 function ScopePill({
   label,
   icon,
@@ -60,7 +69,12 @@ function ScopePill({
           ? "border-destructive/40 bg-destructive/10 text-destructive"
           : "border-border/60 bg-muted/30 text-muted-foreground";
   return (
-    <div className={cn("flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium", colors)}>
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium",
+        colors,
+      )}
+    >
       {icon}
       <span>{label}</span>
       {status === "running" && <RefreshCw className="h-3 w-3 animate-spin" />}
@@ -110,10 +124,13 @@ function CacheLine({
       </div>
       <div className="flex items-center gap-2">
         <Progress value={pct} className="h-1 flex-1" />
-        <span className={cn("text-[10px] tabular-nums", expired ? "text-destructive" : "text-muted-foreground")}>
-          {expired
-            ? "expirado"
-            : `${Math.ceil(remainingMs / 60000)}m restantes`}
+        <span
+          className={cn(
+            "text-[10px] tabular-nums",
+            expired ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {expired ? "expirado" : `${Math.ceil(remainingMs / 60000)}m restantes`}
         </span>
       </div>
     </div>
@@ -132,17 +149,30 @@ export function DashboardHeader({
   syncProgress,
   cacheStatus,
 }: Props) {
-
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const from = new Date(range.from);
-  const to = new Date(range.to);
+  //const from = range.from ? new Date(range.from) : undefined;
+  //const to = range.to ? new Date(range.to) : undefined;
   const validation = validateClient(client);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
+
+  const parseLocal = (dateStr?: string) => {
+    if (!dateStr) return undefined;
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  // 2. Use a função para ler o que vem do Pai
+  const from = parseLocal(range.from);
+  const to = parseLocal(range.to);
+
+  // LOG 1 e 2: Verificando o fluxo de descida (Pai -> Filho)
+  console.log("1. ESTADO RECEBIDO DO PAI:", range);
+  console.log("2. CONVERSÃO PARA A UI:", { from, to });
 
   return (
     <header className="flex flex-col gap-4 border-b border-border/60 bg-background/60 px-6 py-5 backdrop-blur">
@@ -167,31 +197,41 @@ export function DashboardHeader({
           </Button>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className={cn("justify-start gap-2 font-normal")}>
+              <Button variant="outline" className={cn("justify-start gap-1 font-normal")}>
                 <CalendarIcon className="h-4 w-4" />
-                {format(from, "dd MMM", { locale: ptBR })} – {format(to, "dd MMM yyyy", { locale: ptBR })}
+                {from ? format(from, "dd MMM", { locale: ptBR }) : "Data Inicial"} –{" "}
+                {to ? format(to, "dd MMM yyyy", { locale: ptBR }) : "Data Final"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
+            <PopoverContent className="w-auto p-1" align="end">
               <Calendar
                 mode="range"
-                selected={{ from, to }}
+                // Se não tiver 'from', passa undefined pro picker entender que está vazio
+                selected={from ? { from, to } : undefined}
                 onSelect={(r) => {
-                  if (r?.from && r?.to) {
-                    onRangeChange({
-                      from: r.from.toISOString().slice(0, 10),
-                      to: r.to.toISOString().slice(0, 10),
-                    });
+                  // Se o usuário desmarcar tudo (clique duplo na mesma data)
+                  if (!r) {
+                    onRangeChange({ from: "", to: "" });
+                    return;
                   }
+
+                  onRangeChange({
+                    from: r.from ? format(r.from, "yyyy-MM-dd") : "",
+                    to: r.to ? format(r.to, "yyyy-MM-dd") : "",
+                  });
                 }}
                 numberOfMonths={2}
+                showOutsideDays={false}
                 className={cn("p-3 pointer-events-auto")}
               />
             </PopoverContent>
           </Popover>
 
-          <Select value={attribution} onValueChange={(v) => onAttributionChange(v as AttributionWindow)}>
-            <SelectTrigger className="w-[230px] gap-2">
+          <Select
+            value={attribution}
+            onValueChange={(v) => onAttributionChange(v as AttributionWindow)}
+          >
+            <SelectTrigger className="w-[230hpx] gap-2">
               <Target className="h-4 w-4 text-muted-foreground" />
               <SelectValue placeholder="Atribuição" />
             </SelectTrigger>
@@ -210,7 +250,6 @@ export function DashboardHeader({
           </Button>
         </div>
       </div>
-
 
       <div className="flex flex-wrap items-center gap-4">
         <CacheLine

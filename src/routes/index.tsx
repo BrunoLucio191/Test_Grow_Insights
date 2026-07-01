@@ -5,12 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  listClients,
-  syncPaid,
-  syncOrganic,
-  getCacheStatus,
-} from "@/lib/analytics.functions";
+import { listClients, syncPaid, syncOrganic, getCacheStatus } from "@/lib/analytics.functions";
 import { ClientSidebar } from "@/components/begrow/ClientSidebar";
 import { DashboardHeader, type SyncProgress } from "@/components/begrow/DashboardHeader";
 import { ClientSettingsDialog } from "@/components/begrow/ClientSettingsDialog";
@@ -18,9 +13,13 @@ import { PaidTab } from "@/components/begrow/PaidTab";
 import { OrganicTab } from "@/components/begrow/OrganicTab";
 import { AiTab } from "@/components/begrow/AiTab";
 import { Toaster } from "@/components/ui/sonner";
-import { validateClient, DEFAULT_ATTRIBUTION, type DateRange, type AttributionWindow } from "@/lib/analytics-types";
+import {
+  validateClient,
+  DEFAULT_ATTRIBUTION,
+  type DateRange,
+  type AttributionWindow,
+} from "@/lib/analytics-types";
 import { TrendingUp, Radio, Sparkles } from "lucide-react";
-
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -64,7 +63,6 @@ function Dashboard() {
     organic: "idle",
   });
 
-
   useEffect(() => {
     if (clients?.length && !selectedId) setSelectedId(clients[0].id);
   }, [clients, selectedId]);
@@ -82,12 +80,10 @@ function Dashboard() {
 
   const { data: cacheStatus } = useQuery({
     queryKey: ["cache-status", selectedId, range.from, range.to, attribution],
-    queryFn: () =>
-      cacheStatusFn({ data: { clientId: selectedId!, range, attribution } }),
+    queryFn: () => cacheStatusFn({ data: { clientId: selectedId!, range, attribution } }),
     enabled: !!selectedId,
     refetchInterval: 60_000,
   });
-
 
   const onSync = async () => {
     if (!selectedId || !selected) return;
@@ -112,7 +108,6 @@ function Dashboard() {
 
     const runPaid = v.paidOk
       ? syncPaidFn({ data: { clientId: selectedId, range, attribution } })
-
           .then(() => {
             setSyncProgress((p) => ({ ...p, paid: "done" }));
             qc.invalidateQueries({ queryKey: ["paid", selectedId] });
@@ -141,25 +136,18 @@ function Dashboard() {
     });
     toast.success("Sincronização concluída");
     setSyncing(false);
-    setTimeout(
-      () => setSyncProgress({ paid: "idle", organic: "idle" }),
-      2500,
-    );
+    setTimeout(() => setSyncProgress({ paid: "idle", organic: "idle" }), 2500);
   };
 
   return (
     <div className="flex min-h-screen bg-background">
       <Toaster />
-      <ClientSidebar
-        clients={clients ?? []}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-      />
+      <ClientSidebar clients={clients ?? []} selectedId={selectedId} onSelect={setSelectedId} />
 
-      <main className="flex-1 overflow-x-hidden">
+      <main className="flex-10 overflow-x-hidden">
         {isLoading || !selected ? (
           <div className="p-8">
-            <Skeleton className="h-12 w-64" />
+            <Skeleton className="h-7 w-64" />
             <div className="mt-8 grid gap-4 md:grid-cols-3 xl:grid-cols-5">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-32" />
@@ -200,7 +188,12 @@ function Dashboard() {
                 </TabsList>
 
                 <TabsContent value="paid">
-                  <PaidTab clientId={selected.id} clientName={selected.name} range={range} attribution={attribution} />
+                  <PaidTab
+                    clientId={selected.id}
+                    clientName={selected.name}
+                    range={range}
+                    attribution={attribution}
+                  />
                 </TabsContent>
                 <TabsContent value="organic">
                   <OrganicTab clientId={selected.id} range={range} />
@@ -211,7 +204,6 @@ function Dashboard() {
               </Tabs>
             </div>
           </>
-
         )}
       </main>
     </div>

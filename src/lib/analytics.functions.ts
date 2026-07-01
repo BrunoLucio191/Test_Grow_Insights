@@ -2,7 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { mockPaid, mockOrganic } from "./analytics-mocks";
-import type { ClientRow, PaidData, OrganicData, Campaign, TimeSeriesPoint, TopPost } from "./analytics-types";
+import type {
+  ClientRow,
+  PaidData,
+  OrganicData,
+  Campaign,
+  TimeSeriesPoint,
+  TopPost,
+} from "./analytics-types";
 import { isPlaceholderId } from "./analytics-types";
 
 const dateRangeSchema = z.object({
@@ -91,17 +98,21 @@ const EMPTY_ORGANIC: OrganicData = {
 
 /* -------------------- Clients -------------------- */
 
-export const listClients = createServerFn({ method: "GET" }).handler(async (): Promise<ClientRow[]> => {
-  const { data, error } = await supabaseAdmin
-    .from("clients")
-    .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
-    .order("name", { ascending: true });
-  if (error) {
-    console.error("listClients error:", error);
-    return [];
-  }
-  return (data as ClientRow[]) ?? [];
-});
+export const listClients = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ClientRow[]> => {
+    const { data, error } = await supabaseAdmin
+      .from("clients")
+      .select(
+        "id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window",
+      )
+      .order("name", { ascending: true });
+    if (error) {
+      console.error("listClients error:", error);
+      return [];
+    }
+    return (data as ClientRow[]) ?? [];
+  },
+);
 
 export const createClient = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ name: z.string().trim().min(1).max(120) }).parse(d))
@@ -109,12 +120,13 @@ export const createClient = createServerFn({ method: "POST" })
     const { data: row, error } = await supabaseAdmin
       .from("clients")
       .insert({ name: data.name })
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
+      .select(
+        "id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window",
+      )
       .single();
     if (error) throw new Error(error.message);
     return row as ClientRow;
   });
-
 export const deleteClient = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<{ ok: true }> => {
@@ -138,7 +150,9 @@ export const importMetaAccounts = createServerFn({ method: "POST" }).handler(
     const accounts = res.data ?? [];
 
     const { data: existing } = await supabaseAdmin.from("clients").select("meta_ad_account_id");
-    const have = new Set((existing ?? []).map((r) => r.meta_ad_account_id).filter((v): v is string => !!v));
+    const have = new Set(
+      (existing ?? []).map((r) => r.meta_ad_account_id).filter((v): v is string => !!v),
+    );
 
     const toInsert: Array<{ name: string; meta_ad_account_id: string }> = [];
     for (const a of accounts) {
@@ -211,7 +225,11 @@ async function invalidateCache(clientId: string, scope?: string) {
 
 /* -------------------- Meta Graph helpers -------------------- */
 
-async function graphGet<T = any>(path: string, params: Record<string, string>, token: string): Promise<T> {
+async function graphGet<T = unknown>(
+  path: string,
+  params: Record<string, string>,
+  token: string,
+): Promise<T> {
   const url = new URL(`${GRAPH_API}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set("access_token", token);
@@ -305,7 +323,10 @@ async function fetchMetaAdsReal(
     reach: number;
     actionsAgg: Map<string, number>;
     valuesAgg: Map<string, number>;
-    byDate: Map<string, { spend: number; actions: Map<string, number>; values: Map<string, number> }>;
+    byDate: Map<
+      string,
+      { spend: number; actions: Map<string, number>; values: Map<string, number> }
+    >;
   };
   const byCampaign = new Map<string, CampAcc>();
 
@@ -446,7 +467,8 @@ async function fetchMetaAdsReal(
       revenue: +totalRevenue.toFixed(2),
       roas: totalSpend > 0 ? +(totalRevenue / totalSpend).toFixed(2) : 0,
       cpa: totalConversions > 0 ? +(totalSpend / totalConversions).toFixed(2) : 0,
-      ctr: totalImpressions > 0 ? +((totalInlineLinkClicks / totalImpressions) * 100).toFixed(2) : 0,
+      ctr:
+        totalImpressions > 0 ? +((totalInlineLinkClicks / totalImpressions) * 100).toFixed(2) : 0,
       cpm: totalImpressions > 0 ? +((totalSpend / totalImpressions) * 1000).toFixed(2) : 0,
       impressions: totalImpressions,
       clicks: totalClicks,
@@ -465,7 +487,11 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<PaidData> => {
     if (USE_MOCKS) return mockPaid(data.clientId, data.range);
 
-    const { data: client } = await supabaseAdmin.from("clients").select("*").eq("id", data.clientId).single();
+    const { data: client } = await supabaseAdmin
+      .from("clients")
+      .select("*")
+      .eq("id", data.clientId)
+      .single();
     if (!client) throw new Error("Cliente não encontrado");
     const c = client as ClientRow;
     const attr = data.attribution ?? c.attribution_window ?? "7d_click,1d_view";
@@ -501,7 +527,10 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
 
 /* -------------------- Organic (FB + IG) -------------------- */
 
-async function fetchOrganicReal(client: ClientRow, range: { from: string; to: string }): Promise<OrganicData> {
+async function fetchOrganicReal(
+  client: ClientRow,
+  range: { from: string; to: string },
+): Promise<OrganicData> {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) throw new Error("META_ACCESS_TOKEN not set");
 
@@ -613,7 +642,10 @@ async function fetchOrganicReal(client: ClientRow, range: { from: string; to: st
         );
         return r.data ?? [];
       } catch (e) {
-        console.warn(`[organic][ig] insights ${JSON.stringify(params)} falhou:`, (e as Error).message);
+        console.warn(
+          `[organic][ig] insights ${JSON.stringify(params)} falhou:`,
+          (e as Error).message,
+        );
         return [];
       }
     };
@@ -644,7 +676,8 @@ async function fetchOrganicReal(client: ClientRow, range: { from: string; to: st
       const media = await graphGet<{ data: any[] }>(
         `/${client.ig_account_id}/media`,
         {
-          fields: "id,caption,media_url,thumbnail_url,like_count,comments_count,timestamp,insights.metric(reach)",
+          fields:
+            "id,caption,media_url,thumbnail_url,like_count,comments_count,timestamp,insights.metric(reach)",
           limit: "25",
         },
         token,
@@ -689,11 +722,17 @@ export const fetchOrganicData = createServerFn({ method: "POST" })
     const cached = await readCache<OrganicData>(data.clientId, "organic", data.range, false);
     if (cached) return cached;
 
-    const { data: client } = await supabaseAdmin.from("clients").select("*").eq("id", data.clientId).single();
+    const { data: client } = await supabaseAdmin
+      .from("clients")
+      .select("*")
+      .eq("id", data.clientId)
+      .single();
     if (!client) throw new Error("Cliente não encontrado");
     const c = client as ClientRow;
     if (isPlaceholder(c.meta_page_id) && isPlaceholder(c.ig_account_id)) {
-      console.warn(`[organic] cliente "${c.name}" sem meta_page_id/ig_account_id reais (placeholder).`);
+      console.warn(
+        `[organic] cliente "${c.name}" sem meta_page_id/ig_account_id reais (placeholder).`,
+      );
       return EMPTY_ORGANIC;
     }
 
@@ -726,14 +765,22 @@ export const syncClient = createServerFn({ method: "POST" })
     await Promise.allSettled([
       (async () => {
         if (USE_MOCKS) return;
-        const { data: c } = await supabaseAdmin.from("clients").select("*").eq("id", data.clientId).single();
+        const { data: c } = await supabaseAdmin
+          .from("clients")
+          .select("*")
+          .eq("id", data.clientId)
+          .single();
         if (!c) return;
         const paid = await fetchMetaAdsReal(c as ClientRow, data.range);
         await writeCache(data.clientId, "paid", data.range, paid);
       })(),
       (async () => {
         if (USE_MOCKS) return;
-        const { data: c } = await supabaseAdmin.from("clients").select("*").eq("id", data.clientId).single();
+        const { data: c } = await supabaseAdmin
+          .from("clients")
+          .select("*")
+          .eq("id", data.clientId)
+          .single();
         if (!c) return;
         const organic = await fetchOrganicReal(c as ClientRow, data.range);
         await writeCache(data.clientId, "organic", data.range, organic);
@@ -808,7 +855,9 @@ export const getCacheStatus = createServerFn({ method: "POST" })
       const row = rows?.find((r) => r.scope === scope);
       if (!row) return { fetchedAt: null, expiresAt: null };
       const fetchedAt = row.fetched_at;
-      const expiresAt = new Date(new Date(fetchedAt).getTime() + CACHE_TTL_SECONDS * 1000).toISOString();
+      const expiresAt = new Date(
+        new Date(fetchedAt).getTime() + CACHE_TTL_SECONDS * 1000,
+      ).toISOString();
       return { fetchedAt, expiresAt };
     };
 
@@ -828,7 +877,10 @@ const updateClientSchema = z.object({
   meta_page_id: z.string().trim().max(60).nullable().optional(),
   ig_account_id: z.string().trim().max(60).nullable().optional(),
   conversion_event: z.string().trim().max(80).nullable().optional(),
-  attribution_window: z.enum(["7d_click,1d_view", "1d_click,1d_view", "7d_click", "1d_click"]).nullable().optional(),
+  attribution_window: z
+    .enum(["7d_click,1d_view", "1d_click,1d_view", "7d_click", "1d_click"])
+    .nullable()
+    .optional(),
 });
 
 export const updateClient = createServerFn({ method: "POST" })
@@ -844,17 +896,21 @@ export const updateClient = createServerFn({ method: "POST" })
       updated_at: string;
     } = { updated_at: new Date().toISOString() };
     if (data.name !== undefined) patch.name = data.name;
-    if (data.meta_ad_account_id !== undefined) patch.meta_ad_account_id = data.meta_ad_account_id || null;
+    if (data.meta_ad_account_id !== undefined)
+      patch.meta_ad_account_id = data.meta_ad_account_id || null;
     if (data.meta_page_id !== undefined) patch.meta_page_id = data.meta_page_id || null;
     if (data.ig_account_id !== undefined) patch.ig_account_id = data.ig_account_id || null;
     if (data.conversion_event !== undefined) patch.conversion_event = data.conversion_event || null;
-    if (data.attribution_window !== undefined) patch.attribution_window = data.attribution_window || null;
+    if (data.attribution_window !== undefined)
+      patch.attribution_window = data.attribution_window || null;
 
     const { data: row, error } = await supabaseAdmin
       .from("clients")
       .update(patch)
       .eq("id", data.clientId)
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
+      .select(
+        "id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window",
+      )
       .single();
     if (error) throw new Error(error.message);
     await invalidateCache(data.clientId);
@@ -929,7 +985,11 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     const token = process.env.META_ACCESS_TOKEN;
     if (!token) throw new Error("META_ACCESS_TOKEN não configurado");
 
-    const { data: c } = await supabaseAdmin.from("clients").select("*").eq("id", data.clientId).single();
+    const { data: c } = await supabaseAdmin
+      .from("clients")
+      .select("*")
+      .eq("id", data.clientId)
+      .single();
     if (!c) throw new Error("Cliente não encontrado");
     const client = c as ClientRow;
 
@@ -973,10 +1033,16 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       totInlineClicks += parseFloat(row.inline_link_clicks) || 0;
       totReach = Math.max(totReach, parseFloat(row.reach) || 0);
       for (const a of (row.actions ?? []) as MetaAction[]) {
-        actionsAgg.set(a.action_type, (actionsAgg.get(a.action_type) ?? 0) + (parseFloat(a.value) || 0));
+        actionsAgg.set(
+          a.action_type,
+          (actionsAgg.get(a.action_type) ?? 0) + (parseFloat(a.value) || 0),
+        );
       }
       for (const a of (row.action_values ?? []) as MetaAction[]) {
-        valuesAgg.set(a.action_type, (valuesAgg.get(a.action_type) ?? 0) + (parseFloat(a.value) || 0));
+        valuesAgg.set(
+          a.action_type,
+          (valuesAgg.get(a.action_type) ?? 0) + (parseFloat(a.value) || 0),
+        );
       }
     }
     const convType = pickConversionType(actionsAgg, client.conversion_event ?? null);
@@ -986,7 +1052,9 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     const timeseries = daily.data
       .map((row): import("./analytics-types").TimeSeriesPoint => {
         const spend = parseFloat(row.spend) || 0;
-        const rev = ((row.action_values ?? []) as MetaAction[]).find((a) => a.action_type === convType)?.value || "0";
+        const rev =
+          ((row.action_values ?? []) as MetaAction[]).find((a) => a.action_type === convType)
+            ?.value || "0";
         const revNum = parseFloat(rev) || 0;
         return {
           date: row.date_start,
@@ -1058,7 +1126,9 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     }
 
     // Breakdown helper
-    const fetchBreakdown = async (breakdowns: string): Promise<import("./analytics-types").BreakdownRow[]> => {
+    const fetchBreakdown = async (
+      breakdowns: string,
+    ): Promise<import("./analytics-types").BreakdownRow[]> => {
       try {
         const r = await graphGet<{ data: any[] }>(
           `/${data.campaignId}/insights`,
@@ -1091,7 +1161,10 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       }
     };
 
-    const [ageGender, device] = await Promise.all([fetchBreakdown("age,gender"), fetchBreakdown("device_platform")]);
+    const [ageGender, device] = await Promise.all([
+      fetchBreakdown("age,gender"),
+      fetchBreakdown("device_platform"),
+    ]);
 
     return { campaign, timeseries, ads, ageGender, device };
   });
@@ -1109,7 +1182,10 @@ export type ConnectionTest = {
   instagram: ConnectionCheck;
 };
 
-async function probe(label: string, fn: () => Promise<{ detail: string }>): Promise<ConnectionCheck> {
+async function probe(
+  label: string,
+  fn: () => Promise<{ detail: string }>,
+): Promise<ConnectionCheck> {
   try {
     const r = await fn();
     return { ok: true, label, detail: r.detail };
@@ -1128,7 +1204,9 @@ export const testMetaConnection = createServerFn({ method: "POST" })
     const token = process.env.META_ACCESS_TOKEN;
     const { data: c, error } = await supabaseAdmin
       .from("clients")
-      .select("id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window")
+      .select(
+        "id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window",
+      )
       .eq("id", data.clientId)
       .single();
     if (error || !c) throw new Error("Cliente não encontrado");
@@ -1145,26 +1223,46 @@ export const testMetaConnection = createServerFn({ method: "POST" })
     }
 
     const paid: ConnectionCheck = isPlaceholder(row.meta_ad_account_id)
-      ? { ok: false, label: "Meta Ads", error: "ID de exemplo ou incompleto. Informe o Account ID real." }
+      ? {
+          ok: false,
+          label: "Meta Ads",
+          error: "ID de exemplo ou incompleto. Informe o Account ID real.",
+        }
       : await probe("Meta Ads", async () => {
           const acc = row.meta_ad_account_id!.startsWith("act_")
             ? row.meta_ad_account_id!
             : `act_${row.meta_ad_account_id}`;
-          const r = await graphGet<any>(`/${acc}`, { fields: "name,account_status,currency,timezone_name" }, token);
+          const r = await graphGet<any>(
+            `/${acc}`,
+            { fields: "name,account_status,currency,timezone_name" },
+            token,
+          );
           return {
             detail: `${r.name} · ${r.currency} · status ${r.account_status} · ${r.timezone_name}`,
           };
         });
 
     const page: ConnectionCheck = isPlaceholder(row.meta_page_id)
-      ? { ok: false, label: "Facebook Page", error: "ID de exemplo ou incompleto. Informe o Page ID real." }
+      ? {
+          ok: false,
+          label: "Facebook Page",
+          error: "ID de exemplo ou incompleto. Informe o Page ID real.",
+        }
       : await probe("Facebook Page", async () => {
-          const r = await graphGet<any>(`/${row.meta_page_id}`, { fields: "name,category,fan_count" }, token);
+          const r = await graphGet<any>(
+            `/${row.meta_page_id}`,
+            { fields: "name,category,fan_count" },
+            token,
+          );
           return { detail: `${r.name} · ${r.category ?? "—"} · ${r.fan_count ?? 0} fãs` };
         });
 
     const instagram: ConnectionCheck = isPlaceholder(row.ig_account_id)
-      ? { ok: false, label: "Instagram", error: "ID de exemplo ou incompleto. Informe o Instagram Account ID real." }
+      ? {
+          ok: false,
+          label: "Instagram",
+          error: "ID de exemplo ou incompleto. Informe o Instagram Account ID real.",
+        }
       : await probe("Instagram", async () => {
           const r = await graphGet<any>(
             `/${row.ig_account_id}`,
@@ -1233,9 +1331,13 @@ Seja específico, cite números reais dos dados. Não use disclaimers genéricos
         const text = await res.text();
         console.error("AI Gateway error:", res.status, text);
         if (res.status === 429)
-          return { markdown: "## Limite atingido\nMuitas requisições. Tente novamente em alguns segundos." };
+          return {
+            markdown: "## Limite atingido\nMuitas requisições. Tente novamente em alguns segundos.",
+          };
         if (res.status === 402)
-          return { markdown: "## Créditos esgotados\nAdicione créditos em Settings → Workspace → Usage." };
+          return {
+            markdown: "## Créditos esgotados\nAdicione créditos em Settings → Workspace → Usage.",
+          };
         return { markdown: `## Erro ${res.status}\n${text.slice(0, 500)}` };
       }
 
