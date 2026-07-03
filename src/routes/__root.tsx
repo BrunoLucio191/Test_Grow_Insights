@@ -7,6 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { authQueries } from "@/services/queries";
 
 import appCss from "../styles.css?url";
 
@@ -68,11 +69,16 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  beforeLoad: async ({ context }) => {
+    const authState = await context.queryClient.ensureQueryData(authQueries.user());
+
+    return { authState };
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
+      { title: "Grow Insights" },
       {
         name: "description",
         content:

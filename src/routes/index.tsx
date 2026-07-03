@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listClients, syncPaid, syncOrganic, getCacheStatus } from "@/lib/analytics.functions";
+import { syncPaid, syncOrganic, getCacheStatus } from "@/lib/syncClient";
+import { listClients } from "@/lib/clientes.server";
 import { ClientSidebar } from "@/components/begrow/ClientSidebar";
+import { EmptyDateState } from "@/components/begrow/EmptyDateState";
 import { DashboardHeader, type SyncProgress } from "@/components/begrow/DashboardHeader";
 import { ClientSettingsDialog } from "@/components/begrow/ClientSettingsDialog";
 import { PaidTab } from "@/components/begrow/PaidTab";
-import { OrganicTab } from "@/components/begrow/OrganicTab";
-import { AiTab } from "@/components/begrow/AiTab";
+import OrganicTab from "@/components/begrow/OrganicTab";
 import { Toaster } from "@/components/ui/sonner";
 import {
   validateClient,
@@ -19,10 +20,18 @@ import {
   type DateRange,
   type AttributionWindow,
 } from "@/lib/analytics-types";
-import { TrendingUp, Radio, Sparkles } from "lucide-react";
+import { TrendingUp, Radio } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
+  beforeLoad: ({ context }) => {
+    if (!context.authState.isAuthenticated) {
+      throw redirect({
+        to: "/login",
+      });
+    }
+  },
   head: () => ({
     meta: [
       { title: "BeGrow OS — Analytics & AI Insights" },
@@ -38,7 +47,7 @@ export const Route = createFileRoute("/")({
 function defaultRange(): DateRange {
   const to = new Date();
   const from = new Date();
-  from.setDate(from.getDate() - 13);
+  //from.setDate(from.getDate() - 13);
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
@@ -54,7 +63,8 @@ function Dashboard() {
   });
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [range, setRange] = useState<DateRange>(defaultRange());
+  const [range, setRange] = useState<DateRange>({ from: "", to: "" });
+  console.log(`aqui akkkkk${JSON.stringify(range)}`);
   const [attribution, setAttribution] = useState<AttributionWindow>(DEFAULT_ATTRIBUTION);
   const [syncing, setSyncing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -139,12 +149,14 @@ function Dashboard() {
     setTimeout(() => setSyncProgress({ paid: "idle", organic: "idle" }), 2500);
   };
 
+  const defaultForComparation = defaultRange();
+
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Toaster />
       <ClientSidebar clients={clients ?? []} selectedId={selectedId} onSelect={setSelectedId} />
-
-      <main className="flex-10 overflow-x-hidden">
+      <main className="flex-1 flex flex-col overflow-x-hidden overflow-y-auto">
+        {" "}
         {isLoading || !selected ? (
           <div className="p-8">
             <Skeleton className="h-7 w-64" />
@@ -156,53 +168,67 @@ function Dashboard() {
           </div>
         ) : (
           <>
-            <DashboardHeader
-              client={selected}
-              range={range}
-              onRangeChange={setRange}
-              attribution={attribution}
-              onAttributionChange={setAttribution}
-              onSync={onSync}
-              onOpenSettings={() => setSettingsOpen(true)}
-              syncing={syncing}
-              syncProgress={syncProgress}
-              cacheStatus={cacheStatus ?? null}
-            />
-            <ClientSettingsDialog
-              client={selected}
-              open={settingsOpen}
-              onOpenChange={setSettingsOpen}
-            />
-            <div className="px-6 py-6">
-              <Tabs defaultValue="paid" className="space-y-6">
-                <TabsList className="bg-card/60">
-                  <TabsTrigger value="paid" className="gap-2">
-                    <TrendingUp className="h-4 w-4" /> Tráfego Pago
-                  </TabsTrigger>
-                  <TabsTrigger value="organic" className="gap-2">
-                    <Radio className="h-4 w-4" /> Orgânico
-                  </TabsTrigger>
-                  <TabsTrigger value="ai" className="gap-2">
-                    <Sparkles className="h-4 w-4" /> AI Optimizer
-                  </TabsTrigger>
-                </TabsList>
+            <>
+              {/* 1. O HEADER (Fica no próprio quadrado, com z-30 pra sempre ficar por cima de tudo e 100% clicável) */}
+              <div className="relative z-30">
+                <DashboardHeader
+                  client={selected}
+                  range={range}
+                  onRangeChange={setRange}
+                  attribution={attribution}
+                  onAttributionChange={setAttribution}
+                  onSync={onSync}
+                  onOpenSettings={() => setSettingsOpen(true)}
+                  syncing={syncing}
+                  syncProgress={syncProgress}
+                  cacheStatus={cacheStatus ?? null}
+                />
+              </div>
 
-                <TabsContent value="paid">
-                  <PaidTab
-                    clientId={selected.id}
-                    clientName={selected.name}
-                    range={range}
-                    attribution={attribution}
-                  />
-                </TabsContent>
-                <TabsContent value="organic">
-                  <OrganicTab clientId={selected.id} range={range} />
-                </TabsContent>
-                <TabsContent value="ai">
-                  <AiTab clientId={selected.id} clientName={selected.name} range={range} />
-                </TabsContent>
-              </Tabs>
-            </div>
+              <ClientSettingsDialog
+                client={selected}
+                open={settingsOpen}
+                onOpenChange={setSettingsOpen}
+              />
+
+              <div className="relative z-10 px-6 py-6 flex-1">
+                {(!range.from || !range.to) && (
+                  <div className="absolute  inset-0 z-20 p-6">
+                    <EmptyDateState className="h-full w-full  justify-center bg-background/60 backdrop-blur-sm" />
+                  </div>
+                )}
+
+                <div
+                  className={cn(
+                    "transition-all duration-500",
+                    (!range.from || !range.to) && "pointer-events-none opacity-30 blur-[2px]",
+                  )}
+                >
+                  <Tabs defaultValue="paid" className="space-y-6">
+                    <TabsList className="bg-card/60">
+                      <TabsTrigger value="paid" className="gap-2">
+                        <TrendingUp className="h-4 w-4" /> Tráfego Pago
+                      </TabsTrigger>
+                      <TabsTrigger value="organic" className="gap-2">
+                        <Radio className="h-4 w-4" /> Orgânico
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="paid">
+                      <PaidTab
+                        clientId={selected.id}
+                        clientName={selected.name}
+                        range={range}
+                        attribution={attribution}
+                      />
+                    </TabsContent>
+                    <TabsContent value="organic">
+                      <OrganicTab clientId={selected.id} range={range} />
+                    </TabsContent>
+                    <TabsContent value="ai"></TabsContent>
+                  </Tabs>
+                </div>
+              </div>
+            </>
           </>
         )}
       </main>

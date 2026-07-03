@@ -3,13 +3,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { Users, Eye, Heart, UserPlus, Instagram, Facebook, MessageCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchOrganicData } from "@/lib/analytics.functions";
+import { fetchOrganicData } from "@/lib/cache.server";
 import type { DateRange } from "@/lib/analytics-types";
 import { KpiCard } from "./KpiCard";
 
 const fmt = (n: number) => new Intl.NumberFormat("pt-BR").format(n);
 
-export function OrganicTab({ clientId, range }: { clientId: string; range: DateRange }) {
+export default function OrganicTab({ clientId, range }: { clientId: string; range: DateRange }) {
   const fn = useServerFn(fetchOrganicData);
   const { data, isLoading } = useQuery({
     queryKey: ["organic", clientId, range.from, range.to],
@@ -32,10 +32,34 @@ export function OrganicTab({ clientId, range }: { clientId: string; range: DateR
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Novos Seguidores" value={fmt(data.kpis.newFollowers)} icon={UserPlus} delta="+18%" trend="up" />
-        <KpiCard label="Alcance Total" value={fmt(data.kpis.reach)} icon={Eye} delta="+24%" trend="up" />
-        <KpiCard label="Engajamento Médio" value={`${data.kpis.avgEngagement}%`} icon={Heart} delta="+0.6pp" trend="up" />
-        <KpiCard label="Visitas ao Perfil" value={fmt(data.kpis.profileVisits)} icon={Users} delta="+11%" trend="up" />
+        <KpiCard
+          label="Novos Seguidores"
+          value={fmt(data.kpis.newFollowers)}
+          icon={UserPlus}
+          delta="+18%"
+          trend="up"
+        />
+        <KpiCard
+          label="Alcance Total"
+          value={fmt(data.kpis.reach)}
+          icon={Eye}
+          delta="+24%"
+          trend="up"
+        />
+        <KpiCard
+          label="Engajamento Médio"
+          value={`${data.kpis.avgEngagement}%`}
+          icon={Heart}
+          delta="+0.6pp"
+          trend="up"
+        />
+        <KpiCard
+          label="Visitas ao Perfil"
+          value={fmt(data.kpis.profileVisits)}
+          icon={Users}
+          delta="+11%"
+          trend="up"
+        />
       </div>
 
       <Card className="border-border/60 bg-card/60 p-6">

@@ -6,6 +6,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5";
   };
+  graphql_public: {
+    Tables: {
+      [_ in never]: never;
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json;
+          operationName?: string;
+          query?: string;
+          variables?: Json;
+        };
+        Returns: Json;
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
   public: {
     Tables: {
       campaign_groups: {
@@ -43,6 +68,35 @@ export type Database = {
           },
         ];
       };
+      client_users: {
+        Row: {
+          client_id: string;
+          cliente: string | null;
+          user_id: string;
+          user_name: string | null;
+        };
+        Insert: {
+          client_id: string;
+          cliente?: string | null;
+          user_id: string;
+          user_name?: string | null;
+        };
+        Update: {
+          client_id?: string;
+          cliente?: string | null;
+          user_id?: string;
+          user_name?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_users_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       clients: {
         Row: {
           attribution_window: string | null;
@@ -54,6 +108,7 @@ export type Database = {
           meta_page_id: string | null;
           name: string;
           updated_at: string;
+          user_id: string | null;
         };
         Insert: {
           attribution_window?: string | null;
@@ -65,6 +120,7 @@ export type Database = {
           meta_page_id?: string | null;
           name: string;
           updated_at?: string;
+          user_id?: string | null;
         };
         Update: {
           attribution_window?: string | null;
@@ -76,6 +132,7 @@ export type Database = {
           meta_page_id?: string | null;
           name?: string;
           updated_at?: string;
+          user_id?: string | null;
         };
         Relationships: [];
       };
@@ -117,12 +174,30 @@ export type Database = {
           },
         ];
       };
+      user_roles: {
+        Row: {
+          role: string | null;
+          user_id: string;
+        };
+        Insert: {
+          role?: string | null;
+          user_id: string;
+        };
+        Update: {
+          role?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      check_user_client_access: {
+        Args: { check_client_id: string };
+        Returns: boolean;
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -249,6 +324,9 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

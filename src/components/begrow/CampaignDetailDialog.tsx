@@ -35,7 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { fetchCampaignDetail } from "@/lib/analytics.functions";
+import { fetchCampaignDetail } from "@/lib/campDetal.server";
 import type { Campaign, DateRange, AttributionWindow } from "@/lib/analytics-types";
 
 const fmt = (n: number, opts: Intl.NumberFormatOptions = {}) =>
@@ -130,7 +130,9 @@ function savePref<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 function MiniStat({
@@ -255,9 +257,9 @@ export function CampaignDetailDialog({
                     variant="outline"
                     className={
                       currentCampaign.status === "ACTIVE"
-                        ? "border-[color:var(--success)]/40 bg-[color:var(--success)]/10 text-[color:var(--success)]"
+                        ? "border-(--success)/40 bg-(--success)/10 text-success)"
                         : currentCampaign.status === "PAUSED"
-                          ? "border-[color:var(--warning)]/40 bg-[color:var(--warning)]/10 text-[color:var(--warning)]"
+                          ? "border-(--warning)/40 bg-(--warning)/40 text-warning"
                           : "border-border bg-muted text-muted-foreground"
                     }
                   >

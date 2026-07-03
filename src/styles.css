@@ -94,18 +94,22 @@
   --sidebar-foreground: oklch(0.85 0.02 270);
   --sidebar-primary: oklch(0.68 0.22 285);
   --sidebar-primary-foreground: oklch(0.99 0.005 270);
-  --sidebar-accent: oklch(0.20 0.03 280);
+  --sidebar-accent: oklch(0.2 0.03 280);
   --sidebar-accent-foreground: oklch(0.97 0.01 270);
   --sidebar-border: oklch(0.22 0.02 270);
   --sidebar-ring: oklch(0.68 0.22 285);
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
-  html { color-scheme: dark; }
+  html {
+    color-scheme: dark;
+  }
 }

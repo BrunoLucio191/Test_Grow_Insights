@@ -15,12 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { updateClient } from "@/lib/clientAdmin.server";
 import {
-  updateClient,
   testMetaConnection,
   type ConnectionTest,
   type ConnectionCheck,
-} from "@/lib/analytics.functions";
+} from "@/lib/campDetal.server";
 import { ATTRIBUTION_OPTIONS, type ClientRow, type AttributionWindow } from "@/lib/analytics-types";
 import {
   Select,
@@ -29,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
 
 type Props = {
   client: ClientRow | null;
@@ -83,7 +82,6 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
       setTest(null);
     }
   }, [client?.id, open]);
-
 
   const save = useMutation({
     mutationFn: () =>
@@ -172,7 +170,8 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
               onChange={(e) => setConvEvent(e.target.value)}
             />
             <p className="text-[11px] text-muted-foreground">
-              Sobrescreve o evento usado como "Resultados" da campanha. Deixe vazio para usar a detecção automática (purchase &gt; lead &gt; link_click).
+              Sobrescreve o evento usado como "Resultados" da campanha. Deixe vazio para usar a
+              detecção automática (purchase &gt; lead &gt; link_click).
             </p>
           </div>
           <div className="space-y-1.5">
@@ -199,7 +198,6 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
           </div>
         </div>
 
-
         {test && (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">
@@ -225,11 +223,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
             )}
             Testar conexão
           </Button>
-          <Button
-            onClick={() => save.mutate()}
-            disabled={save.isPending}
-            className="gap-2"
-          >
+          <Button onClick={() => save.mutate()} disabled={save.isPending} className="gap-2">
             {save.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

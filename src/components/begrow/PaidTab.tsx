@@ -36,11 +36,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -50,13 +46,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  fetchMetaAdsData,
-  generateAiInsights,
   listCampaignGroups,
   upsertCampaignGroup,
   deleteCampaignGroup,
-} from "@/lib/analytics.functions";
-import type { DateRange, Campaign, AttributionWindow, CampaignGroup, PaidData } from "@/lib/analytics-types";
+} from "@/lib/campGroup.server";
+import { fetchMetaAdsData } from "../../lib/pago.server";
+import type {
+  DateRange,
+  Campaign,
+  AttributionWindow,
+  CampaignGroup,
+  PaidData,
+} from "@/lib/analytics-types";
 import { KpiCard } from "./KpiCard";
 import { CampaignDetailDialog } from "./CampaignDetailDialog";
 import { exportCampaignPdf } from "@/lib/pdf-export";
@@ -69,13 +70,33 @@ const pct = (n: number) => `${fmt(n, { maximumFractionDigits: 2 })}%`;
 /* -------- KPI / Column definitions -------- */
 
 type KpiKey =
-  | "spend" | "revenue" | "roas" | "conversions" | "cpa"
-  | "impressions" | "clicks" | "ctr" | "cpm" | "reach" | "frequency" | "conversionRate";
+  | "spend"
+  | "revenue"
+  | "roas"
+  | "conversions"
+  | "cpa"
+  | "impressions"
+  | "clicks"
+  | "ctr"
+  | "cpm"
+  | "reach"
+  | "frequency"
+  | "conversionRate";
 
-const KPI_DEFS: { key: KpiKey; label: string; icon: any; render: (k: PaidData["kpis"]) => string }[] = [
+const KPI_DEFS: {
+  key: KpiKey;
+  label: string;
+  icon: any;
+  render: (k: PaidData["kpis"]) => string;
+}[] = [
   { key: "spend", label: "Valor Investido", icon: DollarSign, render: (k) => brl(k.spend) },
   { key: "revenue", label: "Receita", icon: TrendingUp, render: (k) => brl(k.revenue) },
-  { key: "roas", label: "ROAS", icon: TrendingUp, render: (k) => `${fmt(k.roas, { maximumFractionDigits: 2 })}x` },
+  {
+    key: "roas",
+    label: "ROAS",
+    icon: TrendingUp,
+    render: (k) => `${fmt(k.roas, { maximumFractionDigits: 2 })}x`,
+  },
   { key: "conversions", label: "Resultados", icon: Target, render: (k) => fmt(k.conversions) },
   { key: "cpa", label: "CPA", icon: Target, render: (k) => brl(k.cpa) },
   { key: "impressions", label: "Impressões", icon: Eye, render: (k) => fmt(k.impressions) },
@@ -83,11 +104,33 @@ const KPI_DEFS: { key: KpiKey; label: string; icon: any; render: (k: PaidData["k
   { key: "ctr", label: "CTR", icon: MousePointerClick, render: (k) => pct(k.ctr) },
   { key: "cpm", label: "CPM", icon: Eye, render: (k) => brl(k.cpm) },
   { key: "reach", label: "Alcance", icon: Users, render: (k) => fmt(k.reach) },
-  { key: "frequency", label: "Frequência", icon: Repeat, render: (k) => fmt(k.frequency, { maximumFractionDigits: 2 }) },
-  { key: "conversionRate", label: "Conv. Rate", icon: Percent, render: (k) => pct(k.conversionRate) },
+  {
+    key: "frequency",
+    label: "Frequência",
+    icon: Repeat,
+    render: (k) => fmt(k.frequency, { maximumFractionDigits: 2 }),
+  },
+  {
+    key: "conversionRate",
+    label: "Conv. Rate",
+    icon: Percent,
+    render: (k) => pct(k.conversionRate),
+  },
 ];
 
-type ColKey = "status" | "name" | "objective" | "spend" | "results" | "revenue" | "cpa" | "roas" | "ctr" | "cpm" | "impressions" | "clicks";
+type ColKey =
+  | "status"
+  | "name"
+  | "objective"
+  | "spend"
+  | "results"
+  | "revenue"
+  | "cpa"
+  | "roas"
+  | "ctr"
+  | "cpm"
+  | "impressions"
+  | "clicks";
 
 const COL_DEFS: { key: ColKey; label: string; align?: "right" }[] = [
   { key: "status", label: "Status" },
@@ -104,8 +147,29 @@ const COL_DEFS: { key: ColKey; label: string; align?: "right" }[] = [
   { key: "clicks", label: "Cliques", align: "right" },
 ];
 
-const DEFAULT_KPIS: KpiKey[] = ["spend", "revenue", "roas", "conversions", "cpa", "impressions", "clicks", "ctr", "cpm", "reach", "frequency"];
-const DEFAULT_COLS: ColKey[] = ["status", "name", "objective", "spend", "results", "cpa", "roas", "ctr"];
+const DEFAULT_KPIS: KpiKey[] = [
+  "spend",
+  "revenue",
+  "roas",
+  "conversions",
+  "cpa",
+  "impressions",
+  "clicks",
+  "ctr",
+  "cpm",
+  "reach",
+  "frequency",
+];
+const DEFAULT_COLS: ColKey[] = [
+  "status",
+  "name",
+  "objective",
+  "spend",
+  "results",
+  "cpa",
+  "roas",
+  "ctr",
+];
 
 function loadPref<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -120,7 +184,9 @@ function savePref<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 /* -------- Grouping helpers -------- */
@@ -135,7 +201,7 @@ function aggregateCampaigns(items: Campaign[], groupName: string, groupId: strin
   return {
     id: `group:${groupId}`,
     name: groupName,
-    status: items.some((c) => c.status === "ACTIVE") ? "ACTIVE" : items[0]?.status ?? "PAUSED",
+    status: items.some((c) => c.status === "ACTIVE") ? "ACTIVE" : (items[0]?.status ?? "PAUSED"),
     budget: items.reduce((s, c) => s + (c.budget || 0), 0),
     spent: +spent.toFixed(2),
     results: +results.toFixed(0),
@@ -167,7 +233,6 @@ export function PaidTab({
 }) {
   const qc = useQueryClient();
   const fn = useServerFn(fetchMetaAdsData);
-  const aiFn = useServerFn(generateAiInsights);
   const listGroupsFn = useServerFn(listCampaignGroups);
   const upsertGroupFn = useServerFn(upsertCampaignGroup);
   const deleteGroupFn = useServerFn(deleteCampaignGroup);
@@ -177,14 +242,20 @@ export function PaidTab({
     queryFn: () => fn({ data: { clientId, range, attribution } }),
   });
 
+  console.log(data);
+
   const { data: groups } = useQuery({
     queryKey: ["campaign-groups", clientId],
     queryFn: () => listGroupsFn({ data: { clientId } }),
   });
 
   const [selected, setSelected] = useState<Campaign | null>(null);
-  const [visibleKpis, setVisibleKpis] = useState<KpiKey[]>(() => loadPref(`kpis:${clientId}`, DEFAULT_KPIS));
-  const [visibleCols, setVisibleCols] = useState<ColKey[]>(() => loadPref(`cols:${clientId}`, DEFAULT_COLS));
+  const [visibleKpis, setVisibleKpis] = useState<KpiKey[]>(() =>
+    loadPref(`kpis:${clientId}`, DEFAULT_KPIS),
+  );
+  const [visibleCols, setVisibleCols] = useState<ColKey[]>(() =>
+    loadPref(`cols:${clientId}`, DEFAULT_COLS),
+  );
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
@@ -204,7 +275,8 @@ export function PaidTab({
   };
   const togglePicked = (id: string) => {
     const next = new Set(picked);
-    if (next.has(id)) next.delete(id); else next.add(id);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
     setPicked(next);
   };
 
@@ -213,12 +285,22 @@ export function PaidTab({
     const allCampaigns = data?.campaigns ?? [];
     const byId = new Map(allCampaigns.map((c) => [c.id, c]));
     const groupedIds = new Set<string>();
-    const groupRows: Array<{ kind: "group"; group: CampaignGroup; row: Campaign; children: Campaign[] }> = [];
+    const groupRows: Array<{
+      kind: "group";
+      group: CampaignGroup;
+      row: Campaign;
+      children: Campaign[];
+    }> = [];
     for (const g of groups ?? []) {
       const children = g.campaign_ids.map((id) => byId.get(id)).filter((c): c is Campaign => !!c);
       if (children.length === 0) continue;
       children.forEach((c) => groupedIds.add(c.id));
-      groupRows.push({ kind: "group", group: g, row: aggregateCampaigns(children, g.name, g.id), children });
+      groupRows.push({
+        kind: "group",
+        group: g,
+        row: aggregateCampaigns(children, g.name, g.id),
+        children,
+      });
     }
     const single = allCampaigns
       .filter((c) => !groupedIds.has(c.id))
@@ -254,22 +336,13 @@ export function PaidTab({
     setExporting(true);
     try {
       toast.info("Gerando recomendações da IA…");
-      let aiMarkdown: string | null = null;
-      try {
-        const r = await aiFn({
-          data: { clientName, metrics: { paid: data, organic: null } },
-        });
-        aiMarkdown = r.markdown;
-      } catch (e) {
-        console.warn("AI failed for PDF:", e);
-      }
+
       const merged = rows.map((r) => r.row);
       await exportCampaignPdf({
         clientName,
         range,
         attribution,
         paid: data,
-        aiMarkdown,
         chartElement: chartRef.current,
         campaigns: merged,
       });
@@ -314,17 +387,28 @@ export function PaidTab({
             {c.status}
           </Badge>
         );
-      case "name": return <span className="font-medium text-foreground">{c.name}</span>;
-      case "objective": return <span className="text-xs text-muted-foreground">{c.objective}</span>;
-      case "spend": return brl(c.spent);
-      case "results": return <span className="font-semibold">{fmt(c.results)}</span>;
-      case "revenue": return brl(c.revenue);
-      case "cpa": return c.cpa > 0 ? brl(c.cpa) : "—";
-      case "roas": return c.roas > 0 ? `${fmt(c.roas, { maximumFractionDigits: 2 })}x` : "—";
-      case "ctr": return pct(c.ctr);
-      case "cpm": return brl(c.cpm);
-      case "impressions": return fmt(c.impressions);
-      case "clicks": return fmt(c.clicks);
+      case "name":
+        return <span className="font-medium text-foreground">{c.name}</span>;
+      case "objective":
+        return <span className="text-xs text-muted-foreground">{c.objective}</span>;
+      case "spend":
+        return brl(c.spent);
+      case "results":
+        return <span className="font-semibold">{fmt(c.results)}</span>;
+      case "revenue":
+        return brl(c.revenue);
+      case "cpa":
+        return c.cpa > 0 ? brl(c.cpa) : "—";
+      case "roas":
+        return c.roas > 0 ? `${fmt(c.roas, { maximumFractionDigits: 2 })}x` : "—";
+      case "ctr":
+        return pct(c.ctr);
+      case "cpm":
+        return brl(c.cpm);
+      case "impressions":
+        return fmt(c.impressions);
+      case "clicks":
+        return fmt(c.clicks);
     }
   };
 
@@ -359,7 +443,9 @@ export function PaidTab({
                   </div>
                 </div>
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Tabela de campanhas</p>
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                    Tabela de campanhas
+                  </p>
                   <div className="grid grid-cols-2 gap-2">
                     {COL_DEFS.map((c) => (
                       <label key={c.key} className="flex items-center gap-2 text-xs">
@@ -388,7 +474,11 @@ export function PaidTab({
           </Button>
 
           <Button size="sm" className="gap-2" onClick={onExportPdf} disabled={exporting}>
-            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {exporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
             Exportar PDF
           </Button>
         </div>
@@ -413,7 +503,8 @@ export function PaidTab({
           <div className="text-right text-xs text-muted-foreground">
             <div className="flex items-center justify-end gap-2">
               <Percent className="h-3 w-3" />
-              Taxa de conversão: <span className="font-semibold text-foreground">{pct(data.kpis.conversionRate)}</span>
+              Taxa de conversão:{" "}
+              <span className="font-semibold text-foreground">{pct(data.kpis.conversionRate)}</span>
             </div>
           </div>
         </div>
@@ -425,12 +516,41 @@ export function PaidTab({
               <YAxis yAxisId="left" stroke="#60a5fa" fontSize={11} />
               <YAxis yAxisId="right" orientation="right" stroke="#34d399" fontSize={11} />
               <Tooltip
-                contentStyle={{ background: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff" }}
+                contentStyle={{
+                  background: "#1f2937",
+                  border: "1px solid #374151",
+                  borderRadius: "8px",
+                  color: "#fff",
+                }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line yAxisId="left" type="monotone" dataKey="spend" name="Investido (R$)" stroke="#60a5fa" strokeWidth={2.5} dot={false} />
-              <Line yAxisId="left" type="monotone" dataKey="revenue" name="Receita (R$)" stroke="#a78bfa" strokeWidth={2.5} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS (x)" stroke="#34d399" strokeWidth={2.5} dot={false} />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="spend"
+                name="Investido (R$)"
+                stroke="#60a5fa"
+                strokeWidth={2.5}
+                dot={false}
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="revenue"
+                name="Receita (R$)"
+                stroke="#a78bfa"
+                strokeWidth={2.5}
+                dot={false}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="roas"
+                name="ROAS (x)"
+                stroke="#34d399"
+                strokeWidth={2.5}
+                dot={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -439,10 +559,15 @@ export function PaidTab({
       {/* Groups list */}
       {(groups?.length ?? 0) > 0 && (
         <Card className="border-border/60 bg-card/60 p-4">
-          <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Grupos salvos</p>
+          <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+            Grupos salvos
+          </p>
           <div className="flex flex-wrap gap-2">
             {groups!.map((g) => (
-              <div key={g.id} className="flex items-center gap-2 rounded-md border border-border/60 bg-background/40 px-2 py-1 text-xs">
+              <div
+                key={g.id}
+                className="flex items-center gap-2 rounded-md border border-border/60 bg-background/40 px-2 py-1 text-xs"
+              >
                 <Link2 className="h-3 w-3 text-primary" />
                 <span className="font-medium">{g.name}</span>
                 <span className="text-muted-foreground">({g.campaign_ids.length})</span>
@@ -473,7 +598,10 @@ export function PaidTab({
               <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="w-8 px-2 py-3" />
                 {shownCols.map((c) => (
-                  <th key={c.key} className={`px-4 py-3 font-medium ${c.align === "right" ? "text-right" : ""}`}>
+                  <th
+                    key={c.key}
+                    className={`px-4 py-3 font-medium ${c.align === "right" ? "text-right" : ""}`}
+                  >
                     {c.label}
                   </th>
                 ))}
@@ -497,12 +625,18 @@ export function PaidTab({
                           <button
                             onClick={() => {
                               const n = new Set(expandedGroups);
-                              n.has(entry.group.id) ? n.delete(entry.group.id) : n.add(entry.group.id);
+                              n.has(entry.group.id)
+                                ? n.delete(entry.group.id)
+                                : n.add(entry.group.id);
                               setExpandedGroups(n);
                             }}
                             className="text-muted-foreground"
                           >
-                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            {expanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
                           </button>
                         ) : (
                           <Checkbox
@@ -520,7 +654,9 @@ export function PaidTab({
                             <span className="flex items-center gap-2 font-semibold">
                               <Link2 className="h-3 w-3" />
                               {entry.row.name}
-                              <Badge variant="outline" className="text-[10px]">{entry.children.length} camp.</Badge>
+                              <Badge variant="outline" className="text-[10px]">
+                                {entry.children.length} camp.
+                              </Badge>
                             </span>
                           ) : (
                             renderCell(entry.row, c.key)
@@ -531,7 +667,8 @@ export function PaidTab({
                         {!isGroup && <ChevronRight className="h-4 w-4" />}
                       </td>
                     </tr>
-                    {isGroup && expanded &&
+                    {isGroup &&
+                      expanded &&
                       entry.children.map((child) => (
                         <tr
                           key={`${entry.group.id}-${child.id}`}
@@ -587,7 +724,9 @@ export function PaidTab({
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setGroupDialogOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setGroupDialogOpen(false)}>
+              Cancelar
+            </Button>
             <Button
               onClick={() => saveGroup.mutate()}
               disabled={!groupName.trim() || saveGroup.isPending}

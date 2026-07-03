@@ -31,7 +31,7 @@ import {
   type ClientRow,
   type AttributionWindow,
 } from "@/lib/analytics-types";
-import type { CacheStatus } from "@/lib/analytics.functions";
+import type { CacheStatus } from "@/lib/syncClient";
 
 export type SyncProgress = {
   paid: "idle" | "running" | "done" | "error";
@@ -154,7 +154,7 @@ export function DashboardHeader({
   //const from = range.from ? new Date(range.from) : undefined;
   //const to = range.to ? new Date(range.to) : undefined;
   const validation = validateClient(client);
-
+  console.log(`aqui mano, objeot aqui meu${onRangeChange}`);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
@@ -169,11 +169,7 @@ export function DashboardHeader({
   // 2. Use a função para ler o que vem do Pai
   const from = parseLocal(range.from);
   const to = parseLocal(range.to);
-
-  // LOG 1 e 2: Verificando o fluxo de descida (Pai -> Filho)
-  console.log("1. ESTADO RECEBIDO DO PAI:", range);
-  console.log("2. CONVERSÃO PARA A UI:", { from, to });
-
+  const Data = { from: from?.toString, to: to?.toString };
   return (
     <header className="flex flex-col gap-4 border-b border-border/60 bg-background/60 px-6 py-5 backdrop-blur">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -221,8 +217,10 @@ export function DashboardHeader({
                   });
                 }}
                 numberOfMonths={2}
+                defaultMonth={parseLocal(range?.from)}
                 showOutsideDays={false}
                 className={cn("p-3 pointer-events-auto")}
+                disabled={(date) => date > new Date()}
               />
             </PopoverContent>
           </Popover>

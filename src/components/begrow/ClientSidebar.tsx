@@ -25,19 +25,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import type { ClientRow } from "@/lib/analytics-types";
-import {
-  createClient,
-  deleteClient,
-  importMetaAccounts,
-} from "@/lib/analytics.functions";
-import {
-  Building2,
-  Sparkles,
-  Plus,
-  RefreshCw,
-  Trash2,
-  Loader2,
-} from "lucide-react";
+import { createClient, deleteClient, importMetaAccounts } from "@/lib/clientes.server";
+import { Building2, Sparkles, Plus, RefreshCw, Trash2, Loader2, LogOut } from "lucide-react";
+import { signOut } from "../../services/auth.api";
+import beGrowLogo from "../../assets/beGrowLogo.jpg";
 
 type Props = {
   clients: ClientRow[];
@@ -86,7 +77,9 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["clients"] });
       if (r.imported > 0) {
-        toast.success(`${r.imported} ${r.imported === 1 ? "conta importada" : "contas importadas"}`);
+        toast.success(
+          `${r.imported} ${r.imported === 1 ? "conta importada" : "contas importadas"}`,
+        );
       } else {
         toast.info(`Nenhuma conta nova (${r.total} já cadastradas)`);
       }
@@ -101,17 +94,14 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
   };
 
   return (
-    <aside className="hidden w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+    <aside className="hidden w-92 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex items-center gap-2 px-5 py-5">
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-lg"
-          style={{ background: "var(--gradient-primary)" }}
-        >
-          <Sparkles className="h-5 w-5 text-primary-foreground" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg">
+          <img src={beGrowLogo} className="rounded-xl"></img>
         </div>
         <div>
-          <p className="text-sm font-semibold text-sidebar-foreground">BeGrow OS</p>
-          <p className="text-xs text-muted-foreground">Analytics & AI</p>
+          <p className="text-sm font-semibold text-sidebar-foreground">Grow Insights</p>
+          <p className="text-xs text-muted-foreground">Análises & Insights</p>
         </div>
       </div>
 
@@ -180,9 +170,27 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
           <Plus className="h-4 w-4" />
           Novo cliente
         </Button>
+
+        {/* Botão de Sign Out atualizado */}
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2 text-sidebar-foreground/80 hover:bg-destructive/15 hover:text-destructive"
+          onClick={async () => {
+            try {
+              await signOut(); // Aciona a função de logout do Supabase no servidor
+              window.location.reload(); // Recarrega a página imediatamente após o sucesso
+            } catch (error) {
+              toast.error("Erro ao efetuar logout");
+            }
+          }}
+        >
+          <LogOut className="h-4 w-4" />
+          Sair
+        </Button>
+
         <Button
           variant="outline"
-          className="w-full justify-start gap-2 border-sidebar-border bg-transparent text-sidebar-foreground/80 hover:bg-sidebar-accent/60"
+          className="w-full justify-start gap-2 text-sidebar-foreground/80"
           onClick={() => importMut.mutate()}
           disabled={importMut.isPending}
         >
@@ -223,10 +231,7 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>
               Cancelar
             </Button>
-            <Button
-              onClick={submitCreate}
-              disabled={createMut.isPending || !newName.trim()}
-            >
+            <Button onClick={submitCreate} disabled={createMut.isPending || !newName.trim()}>
               {createMut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Salvar
             </Button>
@@ -234,10 +239,7 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
-        open={!!toDelete}
-        onOpenChange={(open) => !open && setToDelete(null)}
-      >
+      <AlertDialog open={!!toDelete} onOpenChange={(open) => !open && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remover cliente?</AlertDialogTitle>
