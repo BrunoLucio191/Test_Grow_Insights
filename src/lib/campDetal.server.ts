@@ -15,8 +15,31 @@ import {
   extractMetaActionValue,
 } from "./metaGraph.server.ts";
 import { DialogDescription } from "@radix-ui/react-dialog";
+import { CampaignDetail } from "./analytics-types.ts";
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 // Campaign detail (drill-down)
+
+function extractPostLink(creative: any): string | null {
+  if (!creative) return null;
+
+  if (creative.instagram_permalink_url) {
+    return creative.instagram_permalink_url;
+  }
+
+  if (creative.effective_object_story_id) {
+    const parts = creative.effective_object_story_id.split("_");
+
+    if (parts.length === 2) {
+      const pageId = parts[0];
+      const postId = parts[1];
+      // Montamos o link oficial do Facebook na mão
+      return `https://www.facebook.com/${pageId}/posts/${postId}`;
+    }
+  }
+
+  return null;
+}
+
 export const fetchCampaignDetail = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
@@ -28,22 +51,23 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data }): Promise<import("./analytics-types.ts").CampaignDetail> => {
+  .handler(async ({ data }): Promise<CampaignDetail> => {
     const token = process.env.META_ACCESS_TOKEN;
+
     if (!token) throw new Error("META_ACCESS_TOKEN não configurado");
 
     const supabaseAuth = getSupabaseServerClient();
 
-    const { data: c } = await supabaseAuth
+    const { data: cliente } = await supabaseAuth
       .from("clients")
       .select("*")
       .eq("id", data.clientId)
       .single();
-    if (!c) throw new Error("Cliente não encontrado");
-    const client = c as ClientRow;
+    if (!cliente) throw new Error("Cliente não encontrado");
+    const client = cliente as ClientRow;
 
     const timeRange = JSON.stringify({ since: data.range.from, until: data.range.to });
-    const attrChoice = data.attribution ?? client.attribution_window ?? "7d_click,1d_view";
+    const attrChoice = data.attribution ?? cliente.attribution_window ?? "7d_click,1d_view";
     const attributionWindows = JSON.stringify(attrToArray(attrChoice));
 
     const meta = await graphGet<any>(
@@ -96,7 +120,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         );
       }
     }
-    const convType = pickConversionType(actionsAgg, client.conversion_event ?? null);
+    const convType = pickConversionType(actionsAgg, cliente.conversion_event ?? null);
     const conversions = actionsAgg.get(convType) ?? 0;
     const revenue = valuesAgg.get(convType) ?? 0;
 
@@ -139,7 +163,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     // Ads (creative-level)
     const ads: import("./analytics-types.ts").AdRow[] = [];
     try {
-      const adRows = await graphGet<{ data: any[] }>(
+      const adMetricsPromise = await graphGet<{ data: any[] }>(
         `/${data.campaignId}/insights`,
         {
           time_range: timeRange,
@@ -151,6 +175,24 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         },
         token,
       );
+
+      const adLinksPromise = graphGet<{ data: any[] }>(
+        `/${data.campaignId}/ads`, // Note que aqui é /ads, não /insights
+        {
+          fields: "id,creative{effective_object_story_id,instagram_permalink_url}",
+          limit: "200",
+        },
+        token,
+      );
+
+      const [adRows, adlinkResponse] = await Promise.all([adMetricsPromise, adLinksPromise]);
+      console.log(`Olha isso aqui rapidao${JSON.stringify(adRows)}`);
+
+      const linksDicionario = new Map<string, string | null>();
+      for (const ad of adlinkResponse.data) {
+        linksDicionario.set(ad.id, extractPostLink(ad.creative));
+      }
+
       for (const r of adRows.data) {
         const spend = parseFloat(r.spend) || 0;
         const impressions = parseFloat(r.impressions) || 0;
@@ -158,8 +200,11 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
         const inline_link_clicks = parseFloat(r.inline_link_clicks) || 0;
         const results = extractMetaActionValue(r.actions, convType);
         const rev = extractMetaActionValue(r.action_values, convType);
+
+        const linkAnuncio = linksDicionario.get(r.ad_id) || null;
         ads.push({
           id: r.ad_id,
+          link: linkAnuncio,
           name: r.ad_name ?? "—",
           spend: +spend.toFixed(2),
           impressions,

@@ -27,7 +27,6 @@ export async function fetchMetaAdsReal(
     : `act_${client.meta_ad_account_id}`;
 
   const timeRange = JSON.stringify({ since: range.from, until: range.to });
-  console.log(`resolvendo codigo cudado do time range${timeRange}`);
   const attrChoice = attributionOverride ?? client.attribution_window ?? "7d_click,1d_view";
   const attributionWindows = JSON.stringify(attrToArray(attrChoice));
 
@@ -45,6 +44,24 @@ export async function fetchMetaAdsReal(
     },
     token,
   );
+
+  const accountInsights = await graphGet<{ data: any[] }>(
+    `/${account}/insights`,
+    {
+      time_range: timeRange,
+      level: "account",
+      fields: "reach, frequency",
+    },
+    token,
+  );
+
+  const realTotalReach = accountInsights.data[0]
+    ? parseFloat(accountInsights.data[0].reach) || 0
+    : 0;
+
+  const realTotalFrequency = accountInsights.data[0]
+    ? +Number(accountInsights.data[0].frequency).toFixed(2) || 0
+    : 0;
 
   // Per-row: accumulate raw actions per campaign so we can pick a dominant type.
   type CampAcc = {
@@ -209,12 +226,12 @@ export async function fetchMetaAdsReal(
       cpm: totalImpressions > 0 ? +((totalSpend / totalImpressions) * 1000).toFixed(2) : 0,
       impressions: totalImpressions,
       clicks: totalClicks,
-      reach: totalReach,
+      reach: realTotalReach,
 
       //TODO: arrumar frequency aqui para exibir o dato real
-      frequency: totalReach > 0 ? +(totalImpressions / totalReach).toFixed(3) : 0,
+      frequency: realTotalFrequency,
       conversions: +totalConversions.toFixed(0),
-      conversionRate: totalClicks > 0 ? +((totalConversions / totalClicks) * 0).toFixed(2) : 0,
+      conversionRate: totalClicks > 0 ? +((totalConversions / totalClicks) * 100).toFixed(2) : 0,
     },
     timeseries,
     campaigns,
@@ -250,7 +267,6 @@ export const fetchMetaAdsData = createServerFn({ method: "POST" })
     };
 
     try {
-      console.log(`testando data correta ${typeof data.range.from === "string"}`);
       const fresh = await fetchMetaAdsReal(cliente, data.range, attr);
       await writeCache(data.clientId, sk, data.range, fresh);
       return fresh;

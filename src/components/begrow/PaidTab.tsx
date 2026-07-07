@@ -67,7 +67,18 @@ const fmt = (n: number, opts: Intl.NumberFormatOptions = {}) =>
 const brl = (n: number) => fmt(n, { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const pct = (n: number) => `${fmt(n, { maximumFractionDigits: 2 })}%`;
 
-/* -------- KPI / Column definitions -------- */
+const META_OBJECTIVES: Record<string, string> = {
+  OUTCOME_SALES: "Vendas",
+  OUTCOME_LEADS: "Cadastros",
+  OUTCOME_TRAFFIC: "Tráfego",
+  OUTCOME_ENGAGEMENT: "Engajamento",
+  OUTCOME_AWARENESS: "Reconhecimento",
+  OUTCOME_APP_PROMOTION: "Promoção de App",
+  // Fallbacks úteis caso o cliente tenha campanhas antigas rodando:
+  CONVERSIONS: "Conversões",
+  LINK_CLICKS: "Cliques no Link",
+  POST_ENGAGEMENT: "Engajamento com Publicação",
+};
 
 type KpiKey =
   | "spend"
@@ -242,8 +253,6 @@ export function PaidTab({
     queryFn: () => fn({ data: { clientId, range, attribution } }),
   });
 
-  console.log(data);
-
   const { data: groups } = useQuery({
     queryKey: ["campaign-groups", clientId],
     queryFn: () => listGroupsFn({ data: { clientId } }),
@@ -370,45 +379,51 @@ export function PaidTab({
   const shownKpis = KPI_DEFS.filter((k) => visibleKpis.includes(k.key));
   const shownCols = COL_DEFS.filter((c) => visibleCols.includes(c.key));
 
-  const renderCell = (c: Campaign, key: ColKey) => {
+  const renderCell = (campanha: Campaign, key: ColKey) => {
     switch (key) {
       case "status":
         return (
           <Badge
             variant="outline"
             className={
-              c.status === "ACTIVE"
+              campanha.status === "ACTIVE"
                 ? "border-[color:var(--success)]/40 bg-[color:var(--success)]/10 text-[color:var(--success)]"
-                : c.status === "PAUSED"
+                : campanha.status === "PAUSED"
                   ? "border-[color:var(--warning)]/40 bg-[color:var(--warning)]/10 text-[color:var(--warning)]"
                   : "border-border bg-muted text-muted-foreground"
             }
           >
-            {c.status}
+            {campanha.status}
           </Badge>
         );
       case "name":
-        return <span className="font-medium text-foreground">{c.name}</span>;
-      case "objective":
-        return <span className="text-xs text-muted-foreground">{c.objective}</span>;
+        return (
+          <span className="font-medium text-foreground">
+            {campanha.name.replaceAll("[", "").replaceAll("]", "")}
+          </span>
+        );
+      case "objective": {
+        const nomeObjetivo = META_OBJECTIVES[campanha.objective] || campanha.objective;
+        return <span className="text-xs text-muted-foreground">{nomeObjetivo}</span>;
+      }
       case "spend":
-        return brl(c.spent);
+        return brl(campanha.spent);
       case "results":
-        return <span className="font-semibold">{fmt(c.results)}</span>;
+        return <span className="font-semibold">{fmt(campanha.results)}</span>;
       case "revenue":
-        return brl(c.revenue);
+        return brl(campanha.revenue);
       case "cpa":
-        return c.cpa > 0 ? brl(c.cpa) : "—";
+        return campanha.cpa > 0 ? brl(campanha.cpa) : "—";
       case "roas":
-        return c.roas > 0 ? `${fmt(c.roas, { maximumFractionDigits: 2 })}x` : "—";
+        return campanha.roas > 0 ? `${fmt(campanha.roas, { maximumFractionDigits: 2 })}x` : "—";
       case "ctr":
-        return pct(c.ctr);
+        return pct(campanha.ctr);
       case "cpm":
-        return brl(c.cpm);
+        return brl(campanha.cpm);
       case "impressions":
-        return fmt(c.impressions);
+        return fmt(campanha.impressions);
       case "clicks":
-        return fmt(c.clicks);
+        return fmt(campanha.clicks);
     }
   };
 
@@ -600,12 +615,12 @@ export function PaidTab({
                 {shownCols.map((c) => (
                   <th
                     key={c.key}
-                    className={`px-4 py-3 font-medium ${c.align === "right" ? "text-right" : ""}`}
+                    className={`px-4 py-3  font-medium ${c.align === "right" ? "text-right" : ""}`}
                   >
                     {c.label}
                   </th>
                 ))}
-                <th className="w-8 px-2 py-3" />
+                <th className="w-8 px-2 py-3 " />
               </tr>
             </thead>
             <tbody>
@@ -630,10 +645,10 @@ export function PaidTab({
                                 : n.add(entry.group.id);
                               setExpandedGroups(n);
                             }}
-                            className="text-muted-foreground"
+                            className="text-muted-foreground "
                           >
                             {expanded ? (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-4 w-4 " />
                             ) : (
                               <ChevronRight className="h-4 w-4" />
                             )}
@@ -676,12 +691,12 @@ export function PaidTab({
                           onClick={() => setSelected(child)}
                         >
                           <td className="px-2 py-3" />
-                          {shownCols.map((c) => (
+                          {shownCols.map((campanha) => (
                             <td
-                              key={c.key}
-                              className={`px-4 py-3 pl-10 text-xs ${c.align === "right" ? "text-right tabular-nums" : ""}`}
+                              key={campanha.key}
+                              className={`px-4 py-3 pl-10 text-xs  ${campanha.align === "right" ? "text-right tabular-nums" : ""}`}
                             >
-                              {renderCell(child, c.key)}
+                              {renderCell(child, campanha.key)}
                             </td>
                           ))}
                           <td className="px-2 py-3 text-muted-foreground">

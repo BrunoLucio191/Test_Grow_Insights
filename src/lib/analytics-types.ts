@@ -58,6 +58,7 @@ export type BreakdownRow = {
 
 export type AdRow = {
   id: string;
+  link?: string | null;
   name: string;
   spend: number;
   impressions: number;

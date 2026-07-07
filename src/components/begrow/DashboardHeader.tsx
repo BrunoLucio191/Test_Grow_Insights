@@ -11,6 +11,7 @@ import {
   Settings,
   AlertTriangle,
   Target,
+  Share,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -30,9 +31,15 @@ import {
   type DateRange,
   type ClientRow,
   type AttributionWindow,
+  PaidData,
+  OrganicKpis,
+  TopPost,
 } from "@/lib/analytics-types";
 import type { CacheStatus } from "@/lib/syncClient";
-
+import { useQueryClient } from "@tanstack/react-query";
+import { OrganicData } from "../../lib/analytics-types";
+import { criarLinkCompartilhavel } from "../../lib/shared-links.server";
+import { getSupabaseServerClient } from "../../lib/supabase";
 export type SyncProgress = {
   paid: "idle" | "running" | "done" | "error";
   organic: "idle" | "running" | "done" | "error";
@@ -49,6 +56,7 @@ type Props = {
   syncing?: boolean;
   syncProgress?: SyncProgress;
   cacheStatus?: CacheStatus | null;
+  isShared?: boolean;
 };
 
 function ScopePill({
@@ -114,7 +122,7 @@ function CacheLine({
   const expired = remainingMs <= 0;
 
   return (
-    <div className="flex flex-col gap-1 min-w-[180px]">
+    <div className="flex flex-col gap-1 min-w-45">
       <div className="flex items-center gap-2 text-xs">
         {icon}
         <span className="font-medium text-foreground">{label}</span>
@@ -148,13 +156,15 @@ export function DashboardHeader({
   syncing,
   syncProgress,
   cacheStatus,
+  isShared = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const queryClient = useQueryClient();
+
   //const from = range.from ? new Date(range.from) : undefined;
   //const to = range.to ? new Date(range.to) : undefined;
   const validation = validateClient(client);
-  console.log(`aqui mano, objeot aqui meu${onRangeChange}`);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
@@ -170,6 +180,53 @@ export function DashboardHeader({
   const from = parseLocal(range.from);
   const to = parseLocal(range.to);
   const Data = { from: from?.toString, to: to?.toString };
+
+  //pega payload e salva ele o server
+  const handleShare = async () => {
+    const paidData = queryClient.getQueryData<PaidData>([
+      "paid",
+      client.id,
+      range.from,
+      range.to,
+      attribution,
+    ]);
+
+    const kpis = queryClient.getQueryData<OrganicKpis>(["organic_kpis", client.id]);
+    const posts = queryClient.getQueryData<TopPost[]>(["organic_posts", client.id]);
+
+    const organic_data: OrganicData = {
+      kpis: kpis || { newFollowers: 0, reach: 0, avgEngagement: 0, profileVisits: 0 },
+      topPosts: posts || [],
+    };
+
+    // GUArDAR OS METADADOS AQUI DENTRO DO PAYLOAD
+    const payload = {
+      paidData,
+      organic_data,
+      meta: {
+        clientId: client.id,
+        clientName: client.name,
+        range,
+        attribution,
+      },
+    };
+
+    if (!paidData && !kpis && !posts) {
+      console.error("Nenhum dado carregado para compartilhar");
+      return;
+    }
+
+    // Chamar a sua função existente do servidor
+    const token = await criarLinkCompartilhavel({
+      data: {
+        clientId: client.id,
+        payload: payload, // Seu z.any() vai aceitar isso perfeitamente
+      },
+    });
+
+    const linkCompleto = `${window.location.origin}/shared/${token}`;
+    await navigator.clipboard.writeText(linkCompleto);
+  };
   return (
     <header className="flex flex-col gap-4 border-b border-border/60 bg-background/60 px-6 py-5 backdrop-blur">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -186,67 +243,74 @@ export function DashboardHeader({
             )}
           </h1>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="icon" onClick={onOpenSettings} title="Configurar IDs">
-            <Settings className="h-4 w-4" />
-          </Button>
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className={cn("justify-start gap-1 font-normal")}>
-                <CalendarIcon className="h-4 w-4" />
-                {from ? format(from, "dd MMM", { locale: ptBR }) : "Data Inicial"} –{" "}
-                {to ? format(to, "dd MMM yyyy", { locale: ptBR }) : "Data Final"}
+        {!isShared && (
+          <div className="flex flex-wrap items-center gap-2">
+            {from && (
+              <Button variant="outline" onClick={handleShare}>
+                <Share className="h-4 w-4" />
+                Share
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-1" align="end">
-              <Calendar
-                mode="range"
-                // Se não tiver 'from', passa undefined pro picker entender que está vazio
-                selected={from ? { from, to } : undefined}
-                onSelect={(r) => {
-                  // Se o usuário desmarcar tudo (clique duplo na mesma data)
-                  if (!r) {
-                    onRangeChange({ from: "", to: "" });
-                    return;
-                  }
+            )}
 
-                  onRangeChange({
-                    from: r.from ? format(r.from, "yyyy-MM-dd") : "",
-                    to: r.to ? format(r.to, "yyyy-MM-dd") : "",
-                  });
-                }}
-                numberOfMonths={2}
-                defaultMonth={parseLocal(range?.from)}
-                showOutsideDays={false}
-                className={cn("p-3 pointer-events-auto")}
-                disabled={(date) => date > new Date()}
-              />
-            </PopoverContent>
-          </Popover>
+            <Button variant="outline" size="icon" onClick={onOpenSettings} title="Configurar IDs">
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn("justify-start gap-1 font-normal")}>
+                  <CalendarIcon className="h-4 w-4" />
+                  {from ? format(from, "dd MMM", { locale: ptBR }) : "Data Inicial"} –{" "}
+                  {to ? format(to, "dd MMM yyyy", { locale: ptBR }) : "Data Final"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-1" align="end">
+                <Calendar
+                  mode="range"
+                  // Se não tiver 'from', passa undefined pro picker entender que está vazio
+                  selected={from ? { from, to } : undefined}
+                  onSelect={(r) => {
+                    // Se o usuário desmarcar tudo (clique duplo na mesma data)
+                    if (!r) {
+                      onRangeChange({ from: "", to: "" });
+                      return;
+                    }
+                    onRangeChange({
+                      from: r.from ? format(r.from, "yyyy-MM-dd") : "",
+                      to: r.to ? format(r.to, "yyyy-MM-dd") : "",
+                    });
+                  }}
+                  numberOfMonths={2}
+                  defaultMonth={parseLocal(range?.from)}
+                  showOutsideDays={false}
+                  className={cn("p-3 pointer-events-auto")}
+                  disabled={(date) => date > new Date()}
+                />
+              </PopoverContent>
+            </Popover>
 
-          <Select
-            value={attribution}
-            onValueChange={(v) => onAttributionChange(v as AttributionWindow)}
-          >
-            <SelectTrigger className="w-[230hpx] gap-2">
-              <Target className="h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Atribuição" />
-            </SelectTrigger>
-            <SelectContent>
-              {ATTRIBUTION_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select
+              value={attribution}
+              onValueChange={(v) => onAttributionChange(v as AttributionWindow)}
+            >
+              <SelectTrigger className="w-[230hpx] gap-2">
+                <Target className="h-4 w-4 text-muted-foreground" />
+                <SelectValue placeholder="Atribuição" />
+              </SelectTrigger>
+              <SelectContent>
+                {ATTRIBUTION_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Button onClick={onSync} disabled={syncing} className="gap-2">
-            <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
-            Sincronizar dados
-          </Button>
-        </div>
+            <Button onClick={onSync} disabled={syncing} className="gap-2">
+              <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+              Sincronizar dados
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-4">

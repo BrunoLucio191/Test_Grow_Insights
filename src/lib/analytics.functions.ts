@@ -143,10 +143,6 @@ export const updateClient = createServerFn({ method: "POST" })
 export const listCampaignGroups = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<import("./analytics-types").CampaignGroup[]> => {
-    console.log(
-      `🟡 [listCampaignGroups] 1. Iniciando busca de campanhas para o cliente: ${data.clientId}`,
-    );
-
     const supabaseAuth = getSupabaseServerClient();
 
     // --- TESTE DE AUTENTICAÇÃO ---
@@ -154,21 +150,11 @@ export const listCampaignGroups = createServerFn({ method: "POST" })
     const { data: authData, error: authError } = await supabaseAuth.auth.getUser();
 
     if (authError) {
-      console.error(
-        "❌ [listCampaignGroups] 2. Erro ao ler usuário (Token ausente ou expirado):",
-        authError.message,
-      );
+      console.error(authError.message);
     } else {
-      console.log(
-        "🟢 [listCampaignGroups] 2. Usuário reconhecido pelo banco. ID:",
-        authData.user?.id,
-      );
+      console.log(authData.user?.id);
     }
     // -----------------------------
-
-    console.log(
-      "🟡 [listCampaignGroups] 3. Disparando query na tabela campaign_groups com RLS ativado...",
-    );
 
     const { data: rows, error } = await supabaseAuth
       .from("campaign_groups")
@@ -177,18 +163,10 @@ export const listCampaignGroups = createServerFn({ method: "POST" })
       .order("name", { ascending: true });
 
     if (error) {
-      console.error(
-        "❌ [listCampaignGroups] 4. Ocorreu um erro no banco (Provável bloqueio de RLS):",
-        error,
-      );
+      console.error(error);
       return [];
     }
 
-    console.log(
-      `✅ [listCampaignGroups] 5. Sucesso! O banco liberou ${rows?.length || 0} grupos de campanhas para este usuário.`,
-    );
-
-    // Retorno preservado exatamente como você pediu
     return (rows as import("./analytics-types").CampaignGroup[]) ?? [];
   });
 

@@ -39,8 +39,25 @@ export async function writeCache(
   payload: unknown,
 ): Promise<void> {
   const supabaseAuth = getSupabaseServerClient();
+
+  //pegar user_id
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabaseAuth.auth.getUser();
+
+  if (authError) {
+    console.error(authError);
+  }
+
+  if (!user) {
+    throw new Error("Usuario não autenticado");
+  }
+
   const { error } = await supabaseAuth.from("meta_cache").upsert(
     {
+      user_id: user.id,
       client_id: clientId,
       scope,
       range_from: range.from,
@@ -48,10 +65,11 @@ export async function writeCache(
       payload: payload as unknown as Json,
       fetched_at: new Date().toISOString(),
     },
-    { onConflict: "client_id,scope,range_from,range_to" },
+    { onConflict: "user_id,client_id,scope,range_from,range_to" },
   );
   if (error) console.error("❌ [writeCache] error:", error);
 }
+
 export async function invalidateCache(clientId: string, scope?: string) {
   const supabaseAuth = getSupabaseServerClient();
 
@@ -62,7 +80,9 @@ export async function invalidateCache(clientId: string, scope?: string) {
   const { error } = await q;
 
   if (error) console.error("[invalidateCache] error:", error);
-} // Organic (FB + IG)
+}
+
+// Organic (FB + IG)
 export async function fetchOrganicReal(
   client: ClientRow,
   range: { from: string; to: string },
@@ -103,7 +123,12 @@ export async function fetchOrganicReal(
       try {
         const r = await graphGet<{ data: any[] }>(
           `/${client.meta_page_id}/insights`,
-          { metric, since: range.from, until: range.to, period: "day" },
+          {
+            metric,
+            since: Math.floor(new Date(range.from).getTime() / 1000).toString(),
+            until: Math.floor(new Date(range.to).getTime() / 1000).toString(),
+            period: "day",
+          },
           pageToken,
         );
         return r.data ?? [];
@@ -122,14 +147,14 @@ export async function fetchOrganicReal(
     };
 
     const [imp, fans, views, eng] = await Promise.all([
-      tryMetric("page_impressions_unique"),
-      tryMetric("page_fan_adds"),
+      tryMetric("page_total_media_view_unique"),
+      tryMetric("page_daily_follows_unique"),
       tryMetric("page_views_total"),
       tryMetric("page_post_engagements"),
     ]);
 
-    reach += sumValues(imp, "page_impressions_unique");
-    newFollowers += sumValues(fans, "page_fan_adds");
+    reach += sumValues(imp, "page_total_media_view_unique");
+    newFollowers += sumValues(fans, "page_daily_follows_unique");
     profileVisits += sumValues(views, "page_views_total");
     const engTotal = sumValues(eng, "page_post_engagements");
     if (engTotal > 0) {
@@ -143,7 +168,7 @@ export async function fetchOrganicReal(
         `/${client.meta_page_id}/posts`,
         {
           fields:
-            "id,message,full_picture,created_time,likes.summary(true),comments.summary(true),insights.metric(post_impressions_unique)",
+            "id,message,full_picture,created_time,likes.summary(true),comments.summary(true),insights.metric(page_total_media_view_unique)",
           since: range.from,
           until: range.to,
           limit: "10",
@@ -272,8 +297,8 @@ export const fetchOrganicData = createServerFn({ method: "POST" })
       const fresh = await fetchOrganicReal(c, data.range);
       await writeCache(data.clientId, "organic", data.range, fresh);
       return fresh;
-    } catch (e) {
-      console.error("fetchOrganicReal failed:", e);
+    } catch (error) {
+      console.error("fetchOrganicReal failed:", error);
       const stale = await supabaseAuth
         .from("meta_cache")
         .select("payload")
@@ -283,6 +308,6 @@ export const fetchOrganicData = createServerFn({ method: "POST" })
         .eq("range_to", data.range.to)
         .maybeSingle();
       if (stale.data) return stale.data.payload as OrganicData;
-      throw e;
+      throw error;
     }
   });

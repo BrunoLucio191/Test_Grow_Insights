@@ -64,7 +64,6 @@ function Dashboard() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
-  console.log(`aqui akkkkk${JSON.stringify(range)}`);
   const [attribution, setAttribution] = useState<AttributionWindow>(DEFAULT_ATTRIBUTION);
   const [syncing, setSyncing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);

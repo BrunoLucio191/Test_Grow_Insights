@@ -1,38 +1,22 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getSupabaseServerClient } from "./supabase.ts";
+import { CampaignGroup } from "./analytics-types.ts";
 
 //Campaign Groups
 
 export const listCampaignGroups = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
-  .handler(async ({ data }): Promise<import("./analytics-types.ts").CampaignGroup[]> => {
-    console.log(
-      `🟡 [listCampaignGroups] 1. Iniciando busca de campanhas para o cliente: ${data.clientId}`,
-    );
-
+  .handler(async ({ data }): Promise<CampaignGroup[]> => {
     const supabaseAuth = getSupabaseServerClient();
-
-    // --- TESTE DE AUTENTICAÇÃO ---
     // Verifica qual usuário está enviando a requisição para bater com a tabela client_users
     const { data: authData, error: authError } = await supabaseAuth.auth.getUser();
 
     if (authError) {
-      console.error(
-        "❌ [listCampaignGroups] 2. Erro ao ler usuário (Token ausente ou expirado):",
-        authError.message,
-      );
+      console.error(authError.message);
     } else {
-      console.log(
-        "🟢 [listCampaignGroups] 2. Usuário reconhecido pelo banco. ID:",
-        authData.user?.id,
-      );
+      console.log(authData.user?.id);
     }
-    // -----------------------------
-    console.log(
-      "🟡 [listCampaignGroups] 3. Disparando query na tabela campaign_groups com RLS ativado...",
-    );
-
     const { data: rows, error } = await supabaseAuth
       .from("campaign_groups")
       .select("id, client_id, name, campaign_ids")
@@ -40,18 +24,10 @@ export const listCampaignGroups = createServerFn({ method: "POST" })
       .order("name", { ascending: true });
 
     if (error) {
-      console.error(
-        "❌ [listCampaignGroups] 4. Ocorreu um erro no banco (Provável bloqueio de RLS):",
-        error,
-      );
+      console.error(error);
       return [];
     }
 
-    console.log(
-      `✅ [listCampaignGroups] 5. Sucesso! O banco liberou ${rows?.length || 0} grupos de campanhas para este usuário.`,
-    );
-
-    // Retorno preservado exatamente como você pediu
     return (rows as import("./analytics-types.ts").CampaignGroup[]) ?? [];
   });
 

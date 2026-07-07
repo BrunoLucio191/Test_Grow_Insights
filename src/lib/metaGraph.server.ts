@@ -1,11 +1,11 @@
 import { GRAPH_API } from "./analytics.functions";
 
-// Meta Graph helpers
-export async function graphGet<T>(
+// Função de auxilio apra montar url
+export async function graphGet<Type>(
   path: string,
   params: Record<string, string>,
   token: string,
-): Promise<T> {
+): Promise<Type> {
   const url = new URL(`${GRAPH_API}${path}`);
 
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -19,8 +19,9 @@ export async function graphGet<T>(
     throw new Error(`Meta API ${res.status}: ${body.slice(0, 300)}`);
   }
 
-  return res.json() as Promise<T>;
+  return res.json() as Promise<Type>;
 }
+
 export type MetaAction = { action_type: string; value: string };
 /** Extracts numeric value for a specific action_type from a Meta actions/action_values array. */
 export function extractMetaActionValue(arr: MetaAction[] | undefined, actionType: string): number {

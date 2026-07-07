@@ -23,6 +23,7 @@ import {
   Eye,
   Repeat,
   TrendingUp,
+  ExternalLink,
 } from "lucide-react";
 import {
   Dialog,
@@ -226,6 +227,18 @@ export function CampaignDetailDialog({
   const renderAdCell = (ad: NonNullable<typeof data>["ads"][number], key: AdColKey) => {
     switch (key) {
       case "name":
+        if (ad.link) {
+          return (
+            <a
+              href={ad.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-primary hover:underline inline-flex items-center gap-1.5 transition-colors"
+            >
+              {ad.name.slice(1, -1)}
+            </a>
+          );
+        }
         return <span className="font-medium">{ad.name}</span>;
       case "spend":
         return brl(ad.spend);

@@ -6,31 +6,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5";
   };
-  graphql_public: {
-    Tables: {
-      [_ in never]: never;
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
-        Returns: Json;
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
   public: {
     Tables: {
       campaign_groups: {
@@ -145,6 +120,7 @@ export type Database = {
           range_from: string;
           range_to: string;
           scope: string;
+          user_id: string | null;
         };
         Insert: {
           client_id: string;
@@ -154,6 +130,7 @@ export type Database = {
           range_from: string;
           range_to: string;
           scope: string;
+          user_id?: string | null;
         };
         Update: {
           client_id?: string;
@@ -163,10 +140,65 @@ export type Database = {
           range_from?: string;
           range_to?: string;
           scope?: string;
+          user_id?: string | null;
         };
         Relationships: [
           {
             foreignKeyName: "meta_cache_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "meta_cache_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["user_id"];
+          },
+        ];
+      };
+      profiles: {
+        Row: {
+          display_name: string | null;
+          user_id: string;
+        };
+        Insert: {
+          display_name?: string | null;
+          user_id: string;
+        };
+        Update: {
+          display_name?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      shared_links: {
+        Row: {
+          client_id: string;
+          expires_at: string;
+          id: string;
+          snapshot: Json;
+          token: string;
+        };
+        Insert: {
+          client_id: string;
+          expires_at: string;
+          id?: string;
+          snapshot: Json;
+          token: string;
+        };
+        Update: {
+          client_id?: string;
+          expires_at?: string;
+          id?: string;
+          snapshot?: Json;
+          token?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shared_links_client_id_fkey";
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
@@ -324,9 +356,6 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
