@@ -97,6 +97,7 @@ const updateClientSchema = z.object({
   meta_ad_account_id: z.string().trim().max(60).nullable().optional(),
   meta_page_id: z.string().trim().max(60).nullable().optional(),
   ig_account_id: z.string().trim().max(60).nullable().optional(),
+  meta_access_token: z.string().nullable().optional(),
   conversion_event: z.string().trim().max(80).nullable().optional(),
   attribution_window: z
     .enum(["7d_click,1d_view", "1d_click,1d_view", "7d_click", "1d_click"])
@@ -112,15 +113,22 @@ export const updateClient = createServerFn({ method: "POST" })
       meta_ad_account_id?: string | null;
       meta_page_id?: string | null;
       ig_account_id?: string | null;
+      meta_access_token?: string | null; // CORREÇÃO 1: Aqui o tipo é 'string', não 'data...'
       conversion_event?: string | null;
       attribution_window?: string | null;
       updated_at: string;
     } = { updated_at: new Date().toISOString() };
+
     if (data.name !== undefined) patch.name = data.name;
     if (data.meta_ad_account_id !== undefined)
       patch.meta_ad_account_id = data.meta_ad_account_id || null;
     if (data.meta_page_id !== undefined) patch.meta_page_id = data.meta_page_id || null;
     if (data.ig_account_id !== undefined) patch.ig_account_id = data.ig_account_id || null;
+
+    // CORREÇÃO 2: Alimentando o patch com o dado que veio do frontend
+    if (data.meta_access_token !== undefined)
+      patch.meta_access_token = data.meta_access_token || null;
+
     if (data.conversion_event !== undefined) patch.conversion_event = data.conversion_event || null;
     if (data.attribution_window !== undefined)
       patch.attribution_window = data.attribution_window || null;
@@ -131,10 +139,13 @@ export const updateClient = createServerFn({ method: "POST" })
       .update(patch)
       .eq("id", data.clientId)
       .select(
-        "id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window",
+        // CORREÇÃO 3: Adicionando o meta_access_token na string do select
+        "id, name, meta_ad_account_id, meta_page_id, ig_account_id, meta_access_token, conversion_event, attribution_window",
       )
       .single();
+
     if (error) throw new Error(error.message);
+
     await invalidateCache(data.clientId);
     return row as ClientRow;
   });

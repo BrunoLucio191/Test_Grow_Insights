@@ -67,6 +67,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
   const [adId, setAdId] = useState("");
   const [pageId, setPageId] = useState("");
   const [igId, setIgId] = useState("");
+  const [token, setToken] = useState(""); // NOVO ESTADO: Token
   const [convEvent, setConvEvent] = useState("");
   const [attribution, setAttribution] = useState<AttributionWindow | "">("");
   const [test, setTest] = useState<ConnectionTest | null>(null);
@@ -77,11 +78,12 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
       setAdId(client.meta_ad_account_id ?? "");
       setPageId(client.meta_page_id ?? "");
       setIgId(client.ig_account_id ?? "");
+      setToken(client.meta_access_token ?? ""); // NOVO EFFECT: Puxa do banco
       setConvEvent(client.conversion_event ?? "");
       setAttribution((client.attribution_window as AttributionWindow) ?? "");
       setTest(null);
     }
-  }, [client?.id, open]);
+  }, [client, open]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -92,6 +94,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
           meta_ad_account_id: adId.trim() || null,
           meta_page_id: pageId.trim() || null,
           ig_account_id: igId.trim() || null,
+          meta_access_token: token.trim() || null, // NOVO PAYLOAD: Envia pro backend
           conversion_event: convEvent.trim() || null,
           attribution_window: (attribution || null) as AttributionWindow | null,
         },
@@ -159,6 +162,19 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
               onChange={(e) => setIgId(e.target.value)}
             />
           </div>
+
+          {/* NOVO CAMPO: Meta Access Token */}
+          <div className="space-y-1.5">
+            <Label htmlFor="token">Meta Access Token</Label>
+            <Input
+              id="token"
+              type="password"
+              placeholder="EAAGm0..."
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="convev">
               Evento de conversão <span className="text-muted-foreground">(opcional)</span>

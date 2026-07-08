@@ -121,6 +121,7 @@ export type ClientRow = {
   meta_page_id: string | null;
   ig_account_id: string | null;
   conversion_event?: string | null;
+  meta_access_token?: string | null;
   attribution_window?: AttributionWindow | null;
 };
 

@@ -80,6 +80,7 @@ export type Database = {
           id: string;
           ig_account_id: string | null;
           meta_ad_account_id: string | null;
+          meta_access_token: string | null;
           meta_page_id: string | null;
           name: string;
           updated_at: string;
@@ -96,6 +97,7 @@ export type Database = {
           name: string;
           updated_at?: string;
           user_id?: string | null;
+          meta_access_token?: string | null;
         };
         Update: {
           attribution_window?: string | null;
@@ -108,6 +110,7 @@ export type Database = {
           name?: string;
           updated_at?: string;
           user_id?: string | null;
+          meta_access_token?: string | null;
         };
         Relationships: [];
       };

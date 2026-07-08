@@ -148,7 +148,7 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setToDelete(c);
+                    setToDelete(c); // Isso vai abrir o seu AlertDialog lá de baixo!
                   }}
                   className="rounded-md p-1.5 text-muted-foreground opacity-0 transition hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100"
                   aria-label={`Remover ${c.name}`}
