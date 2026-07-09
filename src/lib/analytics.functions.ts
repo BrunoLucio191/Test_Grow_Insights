@@ -108,6 +108,7 @@ const updateClientSchema = z.object({
 export const updateClient = createServerFn({ method: "POST" })
   .inputValidator((d) => updateClientSchema.parse(d))
   .handler(async ({ data }): Promise<ClientRow> => {
+    console.log(" BACKEND RECEBEU:", data);
     const patch: {
       name?: string;
       meta_ad_account_id?: string | null;
@@ -133,13 +134,16 @@ export const updateClient = createServerFn({ method: "POST" })
     if (data.attribution_window !== undefined)
       patch.attribution_window = data.attribution_window || null;
 
+    console.log("====================================");
+    console.log("🔥 DADO QUE SERÁ ENVIADO AO SUPABASE:", patch);
+    console.log("====================================");
     const supabaseAuth = getSupabaseServerClient();
+
     const { data: row, error } = await supabaseAuth
       .from("clients")
       .update(patch)
       .eq("id", data.clientId)
       .select(
-        // CORREÇÃO 3: Adicionando o meta_access_token na string do select
         "id, name, meta_ad_account_id, meta_page_id, ig_account_id, meta_access_token, conversion_event, attribution_window",
       )
       .single();

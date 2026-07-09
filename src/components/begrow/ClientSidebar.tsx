@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import type { ClientRow } from "@/lib/analytics-types";
-import { createClient, deleteClient, importMetaAccounts } from "@/lib/clientes.server";
+import { createClient, deleteClient } from "@/lib/clientes.server";
 import { Building2, Sparkles, Plus, RefreshCw, Trash2, Loader2, LogOut } from "lucide-react";
 import { signOut } from "../../services/auth.api";
 import beGrowLogo from "../../assets/beGrowLogo.jpg";
@@ -40,7 +40,6 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
   const qc = useQueryClient();
   const createFn = useServerFn(createClient);
   const deleteFn = useServerFn(deleteClient);
-  const importFn = useServerFn(importMetaAccounts);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -70,21 +69,6 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
       setToDelete(null);
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao remover"),
-  });
-
-  const importMut = useMutation({
-    mutationFn: () => importFn(),
-    onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ["clients"] });
-      if (r.imported > 0) {
-        toast.success(
-          `${r.imported} ${r.imported === 1 ? "conta importada" : "contas importadas"}`,
-        );
-      } else {
-        toast.info(`Nenhuma conta nova (${r.total} já cadastradas)`);
-      }
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Falha ao importar da Meta"),
   });
 
   const submitCreate = () => {
@@ -188,19 +172,6 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
           Sair
         </Button>
 
-        <Button
-          variant="outline"
-          className="w-full justify-start gap-2 text-sidebar-foreground/80"
-          onClick={() => importMut.mutate()}
-          disabled={importMut.isPending}
-        >
-          {importMut.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-          Importar da Meta
-        </Button>
         <div className="mt-1 flex items-center gap-2 rounded-md bg-sidebar-accent/40 px-3 py-2 text-xs text-muted-foreground">
           <Building2 className="h-3.5 w-3.5" />
           <span>{clients.length} contas conectadas</span>

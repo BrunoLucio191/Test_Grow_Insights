@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { updateClient } from "@/lib/clientAdmin.server";
+import { updateClient } from "@/lib/clientes.server";
 import {
   testMetaConnection,
   type ConnectionTest,
@@ -67,7 +67,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
   const [adId, setAdId] = useState("");
   const [pageId, setPageId] = useState("");
   const [igId, setIgId] = useState("");
-  const [token, setToken] = useState(""); // NOVO ESTADO: Token
+  const [token, setToken] = useState("");
   const [convEvent, setConvEvent] = useState("");
   const [attribution, setAttribution] = useState<AttributionWindow | "">("");
   const [test, setTest] = useState<ConnectionTest | null>(null);
@@ -165,9 +165,9 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
 
           {/* NOVO CAMPO: Meta Access Token */}
           <div className="space-y-1.5">
-            <Label htmlFor="token">Meta Access Token</Label>
+            <Label htmlFor="tokenid">Meta Access Token</Label>
             <Input
-              id="token"
+              id="tokenid"
               type="password"
               placeholder="EAAGm0..."
               value={token}

@@ -7,6 +7,7 @@ import { readCache, writeCache } from "./cache.server.ts";
 import { graphGet, MetaAction, pickConversionType } from "./metaGraph.server.ts";
 import { string } from "zod";
 import { DateRange } from "./analytics-types.ts";
+import { getMetaToken } from "./clientes.server.ts";
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 // Pago (Meta Ads)
 
@@ -17,8 +18,8 @@ export async function fetchMetaAdsReal(
   range: { from: string; to: string },
   attributionOverride?: string | null,
 ): Promise<PaidData> {
-  const token = process.env.META_ACCESS_TOKEN;
-  if (!token) throw new Error("META_ACCESS_TOKEN not set");
+  const token = client.meta_access_token;
+  if (!token) throw new Error("meta_access_token not set");
   if (!client.meta_ad_account_id) {
     throw new Error(`Cliente "${client.name}" sem meta_ad_account_id`);
   }

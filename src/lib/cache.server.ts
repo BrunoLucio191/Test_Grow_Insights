@@ -5,6 +5,7 @@ import { getSupabaseServerClient } from "./supabase.ts";
 import { createServerFn } from "@tanstack/react-start";
 import type { ClientRow, OrganicData, TopPost } from "./analytics-types.ts";
 import { graphGet } from "./metaGraph.server.ts";
+import { getMetaToken } from "./clientes.server.ts";
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 //Cache helpers
 export async function readCache<T>(
@@ -87,8 +88,12 @@ export async function fetchOrganicReal(
   client: ClientRow,
   range: { from: string; to: string },
 ): Promise<OrganicData> {
-  const token = process.env.META_ACCESS_TOKEN;
-  if (!token) throw new Error("META_ACCESS_TOKEN not set");
+  const [{ meta_access_token: token }] = await getMetaToken({
+    data: {
+      clientName: client.name,
+    },
+  });
+  if (!token) throw new Error("meta_access_token not set");
 
   let reach = 0;
   let profileVisits = 0;

@@ -16,6 +16,7 @@ import {
 } from "./metaGraph.server.ts";
 import { DialogDescription } from "@radix-ui/react-dialog";
 import { CampaignDetail } from "./analytics-types.ts";
+import { getMetaToken } from "./clientes.server.ts";
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 // Campaign detail (drill-down)
 
@@ -52,10 +53,6 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }): Promise<CampaignDetail> => {
-    const token = process.env.META_ACCESS_TOKEN;
-
-    if (!token) throw new Error("META_ACCESS_TOKEN não configurado");
-
     const supabaseAuth = getSupabaseServerClient();
 
     const { data: cliente } = await supabaseAuth
@@ -63,8 +60,18 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       .select("*")
       .eq("id", data.clientId)
       .single();
+
     if (!cliente) throw new Error("Cliente não encontrado");
+
     const client = cliente as ClientRow;
+
+    const [{ meta_access_token: token }] = await getMetaToken({
+      data: {
+        clientName: client.name,
+      },
+    });
+
+    if (!token) throw new Error("meta_access_token não configurado");
 
     const timeRange = JSON.stringify({ since: data.range.from, until: data.range.to });
     const attrChoice = data.attribution ?? cliente.attribution_window ?? "7d_click,1d_view";
@@ -297,20 +304,25 @@ async function probe(
 export const testMetaConnection = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<ConnectionTest> => {
-    const token = process.env.META_ACCESS_TOKEN;
     const supabaseAuth = getSupabaseServerClient();
-    const { data: c, error } = await supabaseAuth
+    const { data: cliente, error } = await supabaseAuth
       .from("clients")
       .select(
         "id, name, meta_ad_account_id, meta_page_id, ig_account_id, conversion_event, attribution_window",
       )
       .eq("id", data.clientId)
       .single();
-    if (error || !c) throw new Error("Cliente não encontrado");
-    const row = c as ClientRow;
+    if (error || !cliente) throw new Error("Cliente não encontrado");
 
+    const client = cliente as ClientRow;
+
+    const [{ meta_access_token: token }] = await getMetaToken({
+      data: {
+        clientName: client.name,
+      },
+    });
     if (!token) {
-      const err = { ok: false, error: "META_ACCESS_TOKEN não configurado" } as const;
+      const err = { ok: false, error: "meta_access_token não configurado" } as const;
       return {
         tokenPresent: false,
         paid: { ...err, label: "Meta Ads" },
@@ -319,16 +331,16 @@ export const testMetaConnection = createServerFn({ method: "POST" })
       };
     }
 
-    const paid: ConnectionCheck = isPlaceholder(row.meta_ad_account_id)
+    const paid: ConnectionCheck = isPlaceholder(client.meta_ad_account_id)
       ? {
           ok: false,
           label: "Meta Ads",
           error: "ID de exemplo ou incompleto. Informe o Account ID real.",
         }
       : await probe("Meta Ads", async () => {
-          const acc = row.meta_ad_account_id!.startsWith("act_")
-            ? row.meta_ad_account_id!
-            : `act_${row.meta_ad_account_id}`;
+          const acc = client.meta_ad_account_id!.startsWith("act_")
+            ? client.meta_ad_account_id!
+            : `act_${client.meta_ad_account_id}`;
           const r = await graphGet<any>(
             `/${acc}`,
             { fields: "name,account_status,currency,timezone_name" },
@@ -339,7 +351,7 @@ export const testMetaConnection = createServerFn({ method: "POST" })
           };
         });
 
-    const page: ConnectionCheck = isPlaceholder(row.meta_page_id)
+    const page: ConnectionCheck = isPlaceholder(client.meta_page_id)
       ? {
           ok: false,
           label: "Facebook Page",
@@ -347,14 +359,14 @@ export const testMetaConnection = createServerFn({ method: "POST" })
         }
       : await probe("Facebook Page", async () => {
           const r = await graphGet<any>(
-            `/${row.meta_page_id}`,
+            `/${client.meta_page_id}`,
             { fields: "name,category,fan_count" },
             token,
           );
           return { detail: `${r.name} · ${r.category ?? "—"} · ${r.fan_count ?? 0} fãs` };
         });
 
-    const instagram: ConnectionCheck = isPlaceholder(row.ig_account_id)
+    const instagram: ConnectionCheck = isPlaceholder(client.ig_account_id)
       ? {
           ok: false,
           label: "Instagram",
@@ -362,7 +374,7 @@ export const testMetaConnection = createServerFn({ method: "POST" })
         }
       : await probe("Instagram", async () => {
           const r = await graphGet<any>(
-            `/${row.ig_account_id}`,
+            `/${client.ig_account_id}`,
             { fields: "username,followers_count,media_count" },
             token,
           );

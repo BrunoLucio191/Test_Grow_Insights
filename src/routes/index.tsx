@@ -148,8 +148,6 @@ function Dashboard() {
     setTimeout(() => setSyncProgress({ paid: "idle", organic: "idle" }), 2500);
   };
 
-  const defaultForComparation = defaultRange();
-
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Toaster />
