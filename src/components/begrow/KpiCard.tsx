@@ -28,7 +28,7 @@ export function KpiCard({ label, value, delta, trend = "neutral", icon: Icon }: 
             <p
               className={cn(
                 "mt-2 text-xs font-medium",
-                trend === "up" && "text-[color:var(--success)]",
+                trend === "up" && "text-success",
                 trend === "down" && "text-destructive",
                 trend === "neutral" && "text-muted-foreground",
               )}

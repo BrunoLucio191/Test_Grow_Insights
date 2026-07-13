@@ -62,6 +62,7 @@ import { KpiCard } from "./KpiCard";
 import { CampaignDetailDialog } from "./CampaignDetailDialog";
 import { exportCampaignPdf } from "@/lib/pdf-export";
 
+/* eslint-disable  @typescript-eslint/no-explicit-any */
 const fmt = (n: number, opts: Intl.NumberFormatOptions = {}) =>
   new Intl.NumberFormat("pt-BR", opts).format(n);
 const brl = (n: number) => fmt(n, { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -387,9 +388,9 @@ export function PaidTab({
             variant="outline"
             className={
               campanha.status === "ACTIVE"
-                ? "border-[color:var(--success)]/40 bg-[color:var(--success)]/10 text-[color:var(--success)]"
+                ? "border-(--success)]/40 bg-(--success)]/10 text-(--success)]"
                 : campanha.status === "PAUSED"
-                  ? "border-[color:var(--warning)]/40 bg-[color:var(--warning)]/10 text-[color:var(--warning)]"
+                  ? "border-(--warning)]/40 bg-(--warning)]/10 text-(--warning)]"
                   : "border-border bg-muted text-muted-foreground"
             }
           >
@@ -640,9 +641,11 @@ export function PaidTab({
                           <button
                             onClick={() => {
                               const n = new Set(expandedGroups);
-                              n.has(entry.group.id)
-                                ? n.delete(entry.group.id)
-                                : n.add(entry.group.id);
+                              if (n.has(entry.group.id)) {
+                                n.delete(entry.group.id);
+                              } else {
+                                n.add(entry.group.id);
+                              }
                               setExpandedGroups(n);
                             }}
                             className="text-muted-foreground "

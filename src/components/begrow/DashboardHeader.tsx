@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { SetStateAction, useEffect, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
-  validateClient,
   ATTRIBUTION_OPTIONS,
   type DateRange,
   type ClientRow,
@@ -35,11 +34,13 @@ import {
   OrganicKpis,
   TopPost,
 } from "@/lib/analytics-types";
+import { validateClient } from "@/lib/utils";
 import type { CacheStatus } from "@/lib/syncClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { OrganicData } from "../../lib/analytics-types";
 import { criarLinkCompartilhavel } from "../../lib/shared-links.server";
 import { getSupabaseServerClient } from "../../lib/supabase";
+import { Menu } from "lucide-react";
 export type SyncProgress = {
   paid: "idle" | "running" | "done" | "error";
   organic: "idle" | "running" | "done" | "error";
@@ -57,6 +58,8 @@ type Props = {
   syncProgress?: SyncProgress;
   cacheStatus?: CacheStatus | null;
   isShared?: boolean;
+  toggleSideBar: () => void;
+  sideBarOff: boolean;
 };
 
 function ScopePill({
@@ -157,6 +160,8 @@ export function DashboardHeader({
   syncProgress,
   cacheStatus,
   isShared = false,
+  toggleSideBar,
+  sideBarOff,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -230,19 +235,31 @@ export function DashboardHeader({
   return (
     <header className="flex flex-col gap-4 border-b border-border/60 bg-background/60 px-6 py-5 backdrop-blur">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Cliente ativo
-          </p>
-          <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
-            {client.name}
-            {!validation.anyOk && (
-              <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-400">
-                <AlertTriangle className="h-3 w-3" /> IDs incompletos
-              </span>
-            )}
-          </h1>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center">
+          <Button
+            variant="outline"
+            className={` flex  border gap-4 mt-2 bg-background/30 
+            backdrop-blur  w-10 h-10 rounded-full items-center 
+            justify-center `}
+            onClick={() => toggleSideBar()}
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+          <div className={`min-w-0 `}>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Cliente ativo
+            </p>
+            <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
+              {client.name}
+              {!validation.anyOk && (
+                <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-400">
+                  <AlertTriangle className="h-3 w-3" /> IDs incompletos
+                </span>
+              )}
+            </h1>
+          </div>
         </div>
+
         {!isShared && (
           <div className="flex flex-wrap items-center gap-2">
             {from && (

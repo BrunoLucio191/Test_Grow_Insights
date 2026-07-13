@@ -13,27 +13,31 @@ export const getSupabaseServerClient = createServerOnlyFn(() => {
           getAll() {
             // Lê a string do cabeçalho e transforma direto no array de {name, value} do Supabase
             const cookieHeader = getRequest().headers.get("cookie") || "";
-            return cookieHeader
+            const cookie = cookieHeader
               .split(";")
-              .map((c) => {
-                const [name, ...rest] = c.trim().split("=");
+              .map((cookie) => {
+                const [name, ...rest] = cookie.trim().split("=");
                 return { name, value: rest.join("=") };
               })
-              .filter((c) => c.name);
+              .filter((cookie) => cookie.name);
+            return cookie;
           },
           setAll(cookiesToSet) {
             // Usa a função NATIVA do TanStack Start, limpo e direto!
             cookiesToSet.forEach(({ name, value, options }) => {
               const cookiesOPtions = {
                 ...options,
+                secure: true,
                 maxAge: 60 * 24 * 30,
                 path: "/",
                 sameSite: "lax" as const,
+                httpOnly: true,
               };
-              setCookie(name, value, options);
+              setCookie(name, value, cookiesOPtions);
             });
           },
         },
+        cookieEncoding: "base64url",
       },
     );
   }

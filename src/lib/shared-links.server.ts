@@ -34,14 +34,12 @@ export const buscarLinkCompartilhavel = createServerFn({ method: "GET" })
   .handler(async ({ data: token }) => {
     const supaBase = getSupabaseServerClient();
 
-    // 1. Forçamos uma busca ignorando a data de expiração para ver se o registro SEQUER existe/é visível
     const { data: registroSemData, error: erroRls } = await supaBase
       .from("shared_links")
       .select("token, expires_at")
       .eq("token", token)
       .maybeSingle();
 
-    // Se der erro aqui ou vier nulo, o culpado é 100% o RLS (ou o token não existe mesmo no banco)
     if (erroRls) {
       console.error("Erro de RLS ou Banco ao tentar ler a tabela:", erroRls);
     }

@@ -29,14 +29,16 @@ import { createClient, deleteClient } from "@/lib/clientes.server";
 import { Building2, Sparkles, Plus, RefreshCw, Trash2, Loader2, LogOut } from "lucide-react";
 import { signOut } from "../../services/auth.api";
 import beGrowLogo from "../../assets/beGrowLogo.jpg";
+import { getErrorMessage } from "@/lib/utils";
 
 type Props = {
   clients: ClientRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  isOpen: boolean;
 };
 
-export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
+export function ClientSidebar({ clients, selectedId, onSelect, isOpen }: Props) {
   const qc = useQueryClient();
   const createFn = useServerFn(createClient);
   const deleteFn = useServerFn(deleteClient);
@@ -54,7 +56,7 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
       setNewName("");
       toast.success(`Cliente "${row.name}" criado`);
     },
-    onError: (e: any) => toast.error(e?.message ?? "Erro ao criar cliente"),
+    onError: (error: unknown) => toast.error(getErrorMessage(error) ?? "Erro ao criar cliente"),
   });
 
   const deleteMut = useMutation({
@@ -68,7 +70,7 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
       toast.success("Cliente removido");
       setToDelete(null);
     },
-    onError: (e: any) => toast.error(e?.message ?? "Erro ao remover"),
+    onError: (error: unknown) => toast.error(getErrorMessage(error) ?? "Erro ao remover"),
   });
 
   const submitCreate = () => {
@@ -78,7 +80,14 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
   };
 
   return (
-    <aside className="hidden w-92 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+    <aside
+      className={`
+    shrink-0 flex-col border-r border-sidebar-border bg-sidebar overflow-hidden
+    transition-all duration-300 ease-in-out
+    hidden md:flex
+    ${isOpen ? "w-92 opacity-100 " : "w-0 opacity-0 border-none"}
+  `}
+    >
       <div className="flex items-center gap-2 px-5 py-5">
         <div className="flex h-12 w-12 items-center justify-center rounded-lg">
           <img src={beGrowLogo} className="rounded-xl"></img>
@@ -88,13 +97,11 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
           <p className="text-xs text-muted-foreground">Análises & Insights</p>
         </div>
       </div>
-
       <div className="px-3 pb-2">
         <p className="px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Clientes
         </p>
       </div>
-
       <ScrollArea className="flex-1 px-2">
         <div className="space-y-1 pb-3">
           {clients.map((c) => {
@@ -144,7 +151,6 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
           })}
         </div>
       </ScrollArea>
-
       <div className="space-y-2 border-t border-sidebar-border p-3">
         <Button
           variant="ghost"
@@ -177,7 +183,6 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
           <span>{clients.length} contas conectadas</span>
         </div>
       </div>
-
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -209,7 +214,6 @@ export function ClientSidebar({ clients, selectedId, onSelect }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       <AlertDialog open={!!toDelete} onOpenChange={(open) => !open && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

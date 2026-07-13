@@ -1,6 +1,6 @@
 import { Json } from "@/integrations/supabase/types";
 import { CACHE_TTL_SECONDS, EMPTY_ORGANIC, isPlaceholder } from "./analytics.functions.ts";
-import { clientRangeSchema } from "./analytics.functions.ts";
+import { clientRangeSchema } from "@/zod/clientRange.ts";
 import { getSupabaseServerClient } from "./supabase.ts";
 import { createServerFn } from "@tanstack/react-start";
 import type { ClientRow, OrganicData, TopPost } from "./analytics-types.ts";

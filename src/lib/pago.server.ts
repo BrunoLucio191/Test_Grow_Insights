@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { ClientRow, PaidData, Campaign, TimeSeriesPoint } from "./analytics-types.ts";
 import { attrToArray, scopeKey, isPlaceholder, EMPTY_PAID } from "./analytics.functions.ts";
-import { clientRangeSchema } from "./analytics.functions.ts";
+import { clientRangeSchema } from "@/zod/clientRange.ts";
 import { getSupabaseServerClient } from "./supabase.ts";
 import { readCache, writeCache } from "./cache.server.ts";
 import { graphGet, MetaAction, pickConversionType } from "./metaGraph.server.ts";
@@ -162,7 +162,6 @@ export async function fetchMetaAdsReal(
   const dateBucket = new Map<string, { spend: number; revenue: number }>();
 
   const campaigns: Campaign[] = Array.from(byCampaign.entries()).map(([id, c]) => {
-    //console.log(`presta atencao bem aqui jjjjjjjjjjj${JSON.stringify(c)}`);
     const meta = metaById.get(id) ?? {};
     const convType = pickConversionType(c.actionsAgg, client.conversion_event ?? null);
     const conversions = c.actionsAgg.get(convType) ?? 0;

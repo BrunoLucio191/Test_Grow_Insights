@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getErrorMessage } from "@/lib/utils";
 
 type Props = {
   client: ClientRow | null;
@@ -43,14 +44,14 @@ function CheckRow({ check }: { check: ConnectionCheck }) {
       className={cn(
         "flex items-start gap-2 rounded-md border px-3 py-2 text-xs",
         check.ok
-          ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-300"
+          ? "border-emerald-500/40 bg-desctructive/5 text-emerald-300"
           : "border-destructive/40 bg-destructive/5 text-destructive",
       )}
     >
       <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="font-medium">{check.label}</div>
-        <div className="mt-0.5 break-words text-[11px] opacity-90">
+        <div className="mt-0.5 wrap-break-words text-[11px] opacity-90">
           {check.ok ? check.detail : check.error}
         </div>
       </div>
@@ -94,7 +95,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
           meta_ad_account_id: adId.trim() || null,
           meta_page_id: pageId.trim() || null,
           ig_account_id: igId.trim() || null,
-          meta_access_token: token.trim() || null, // NOVO PAYLOAD: Envia pro backend
+          meta_access_token: token.trim() || null,
           conversion_event: convEvent.trim() || null,
           attribution_window: (attribution || null) as AttributionWindow | null,
         },
@@ -105,7 +106,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
       qc.invalidateQueries({ queryKey: ["clients"] });
       qc.invalidateQueries({ queryKey: ["cache-status"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "Falha ao salvar"),
+    onError: (error: unknown) => toast.error(getErrorMessage(error) ?? "Falha ao salvar"),
   });
 
   const runTest = useMutation({
@@ -115,7 +116,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
       return testFn({ data: { clientId: client!.id } });
     },
     onSuccess: (r) => setTest(r),
-    onError: (e: any) => toast.error(e?.message ?? "Falha no teste"),
+    onError: (error: unknown) => toast.error(getErrorMessage(error) ?? "Falha no teste"),
   });
 
   if (!client) return null;
@@ -201,7 +202,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="default">7d clique + 1d view (padrão Meta)</SelectItem>
-                {ATTRIBUTION_OPTIONS.filter((o) => o.value !== "7d_click,1d_view").map((o) => (
+                {ATTRIBUTION_OPTIONS.filter((o) => o.value !== "7d click,1d view").map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>

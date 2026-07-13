@@ -5,30 +5,6 @@ import { isPlaceholderId } from "./analytics-types";
 import { getSupabaseServerClient } from "../lib/supabase";
 import { invalidateCache } from "./cache.server";
 
-export const dateRangeSchema = z.object({
-  from: z.string(),
-  to: z.string(),
-});
-
-export const attributionSchema = z
-  .enum(["7d_click,1d_view", "1d_click,1d_view", "7d_click", "1d_click"])
-  .optional()
-  .nullable();
-
-export const clientRangeSchema = z.object({
-  clientId: z.string().uuid(),
-  range: dateRangeSchema,
-  attribution: attributionSchema,
-});
-
-/**
- * Converts a comma-separated attribution string into an array of strings.
- * Handles whitespace trimming and filters out empty or falsy entries to ensure data integrity.
- *
- * @param value - The raw attribution string (e.g., "7d_click, 1d_view") or null/undefined.
- * @returns An array of cleaned attribution strings. Returns the default configuration if input is empty.
- */
-
 export function attrToArray(value: string | null | undefined): string[] {
   if (!value) return ["7d_click", "1d_view"];
   return value
@@ -37,26 +13,12 @@ export function attrToArray(value: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
-/**
- * Generates a unique cache key for database storage (meta_cache).
- * * - If the attribution is the default ("7d_click,1d_view"), it returns only
- * the base name ("paid" or "organic") for backward compatibility.
- * - Otherwise, it appends the attribution suffix to ensure that data
- * with different conversion windows is stored in distinct cache records.
- * * @param base - The data scope (paid or organic).
- * @param attribution - The optional attribution window configuration.
- * @returns A formatted string to be used as a cache key.
- */
-
 export function scopeKey(base: "paid" | "organic", attribution?: string | null): string {
   const attr = attribution ?? "7d_click,1d_view";
 
   if (attr === "7d_click,1d_view") return base; // backward compatible
   return `${base}:atr=${attr}`;
 }
-
-// Default: use real Meta API. Set USE_MOCKS=true to force synthetic data.
-export const USE_MOCKS = (process.env.USE_MOCKS ?? "false") === "true";
 
 // Cache TTL: how long a cached response is considered fresh (seconds).
 export const CACHE_TTL_SECONDS = 60 * 60; // 1 hour
@@ -108,7 +70,6 @@ const updateClientSchema = z.object({
 export const updateClient = createServerFn({ method: "POST" })
   .inputValidator((d) => updateClientSchema.parse(d))
   .handler(async ({ data }): Promise<ClientRow> => {
-    console.log(" BACKEND RECEBEU:", data);
     const patch: {
       name?: string;
       meta_ad_account_id?: string | null;
@@ -134,9 +95,6 @@ export const updateClient = createServerFn({ method: "POST" })
     if (data.attribution_window !== undefined)
       patch.attribution_window = data.attribution_window || null;
 
-    console.log("====================================");
-    console.log("🔥 DADO QUE SERÁ ENVIADO AO SUPABASE:", patch);
-    console.log("====================================");
     const supabaseAuth = getSupabaseServerClient();
 
     const { data: row, error } = await supabaseAuth
@@ -159,17 +117,6 @@ export const listCampaignGroups = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<import("./analytics-types").CampaignGroup[]> => {
     const supabaseAuth = getSupabaseServerClient();
-
-    // --- TESTE DE AUTENTICAÇÃO ---
-    // Verifica qual usuário está enviando a requisição para bater com a tabela client_users
-    const { data: authData, error: authError } = await supabaseAuth.auth.getUser();
-
-    if (authError) {
-      console.error(authError.message);
-    } else {
-      console.log(authData.user?.id);
-    }
-    // -----------------------------
 
     const { data: rows, error } = await supabaseAuth
       .from("campaign_groups")

@@ -103,16 +103,16 @@ export type OrganicData = {
   topPosts: TopPost[];
 };
 
-export type AttributionWindow = "7d_click,1d_view" | "1d_click,1d_view" | "7d_click" | "1d_click";
+export type AttributionWindow = "7d click,1d view" | "1d click,1d view" | "7d click" | "1d click";
 
 export const ATTRIBUTION_OPTIONS: { value: AttributionWindow; label: string }[] = [
-  { value: "7d_click,1d_view", label: "7d clique + 1d view (padrão Meta)" },
-  { value: "1d_click,1d_view", label: "1d clique + 1d view" },
-  { value: "7d_click", label: "7d clique apenas" },
-  { value: "1d_click", label: "1d clique apenas" },
+  { value: "7d click,1d view", label: "7d clique + 1d view (padrão Meta)" },
+  { value: "1d click,1d view", label: "1d clique + 1d view" },
+  { value: "7d click", label: "7d clique apenas" },
+  { value: "1d click", label: "1d clique apenas" },
 ];
 
-export const DEFAULT_ATTRIBUTION: AttributionWindow = "7d_click,1d_view";
+export const DEFAULT_ATTRIBUTION: AttributionWindow = "7d click,1d view";
 
 export type ClientRow = {
   id: string;
@@ -146,17 +146,3 @@ export type ClientValidation = {
   anyOk: boolean;
   missing: string[];
 };
-
-export function validateClient(
-  c: Pick<ClientRow, "meta_ad_account_id" | "meta_page_id" | "ig_account_id">,
-): ClientValidation {
-  const paidOk = !isPlaceholderId(c.meta_ad_account_id);
-  const pageOk = !isPlaceholderId(c.meta_page_id);
-  const igOk = !isPlaceholderId(c.ig_account_id);
-  const organicOk = pageOk || igOk;
-  const missing: string[] = [];
-  if (!paidOk) missing.push("Meta Ads Account ID");
-  if (!pageOk) missing.push("Facebook Page ID");
-  if (!igOk) missing.push("Instagram Account ID");
-  return { paidOk, organicOk, anyOk: paidOk || organicOk, missing };
-}

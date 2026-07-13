@@ -1,19 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { ClientRow } from "./analytics-types";
 import {
-  USE_MOCKS,
   scopeKey,
   isPlaceholder,
   EMPTY_PAID,
   EMPTY_ORGANIC,
   CACHE_TTL_SECONDS,
 } from "./analytics.functions";
-import { clientRangeSchema } from "./analytics.functions.ts";
+import { clientRangeSchema } from "@/zod/clientRange.ts";
 import { invalidateCache, writeCache, fetchOrganicReal } from "./cache.server.ts";
 import { fetchMetaAdsReal } from "./pago.server.ts";
 import { getSupabaseServerClient } from "./supabase.ts";
 
 /* -------------------- Sync (invalidate + refetch) -------------------- */
+/* eslint-disable  @typescript-eslint/no-explicit-any */
 export const syncClient = createServerFn({ method: "POST" })
   .inputValidator((d) => clientRangeSchema.parse(d))
   .handler(async ({ data }): Promise<{ ok: true; cachedAt: string }> => {
@@ -40,14 +40,12 @@ export const syncClient = createServerFn({ method: "POST" })
     // 2. EXECUÇÃO COM LOGS DE ERRO
     const results = await Promise.allSettled([
       (async () => {
-        if (USE_MOCKS) return;
         console.log("   -> [syncClient] Buscando Meta Ads...");
         const paid = await fetchMetaAdsReal(clientRow as ClientRow, data.range);
         await writeCache(data.clientId, "paid", data.range, paid);
         console.log("   ✅ [syncClient] Meta Ads salvo no cache!");
       })(),
       (async () => {
-        if (USE_MOCKS) return;
         console.log("   -> [syncClient] Buscando Orgânico...");
         const organic = await fetchOrganicReal(clientRow as ClientRow, data.range);
         await writeCache(data.clientId, "organic", data.range, organic);
@@ -79,7 +77,6 @@ async function syncScope(
   const sk = scope === "paid" ? scopeKey("paid", attribution) : "organic";
 
   await invalidateCache(clientId, sk);
-  if (USE_MOCKS) return new Date().toISOString();
 
   const { data: c, error: authError } = await supabaseAuth
     .from("clients")

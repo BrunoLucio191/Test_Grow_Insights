@@ -8,8 +8,8 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { authQueries } from "@/services/queries";
-
 import appCss from "../styles.css?url";
+import beGrowLogo from "../assets/beGrowLogo.jpg";
 
 function NotFoundComponent() {
   return (
@@ -76,46 +76,69 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   },
   head: () => ({
     meta: [
+      // Configurações Básicas
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Grow Insights" },
+      { title: "BeGrow | Estratégia e Marketing Digital" },
       {
         name: "description",
         content:
-          "Grow Insights is a multi-client marketing analytics dashboard with AI-powered optimization suggestions.",
+          "Estratégias de alto nível em tráfego, copywriting e presença digital. Acelere o crescimento do seu negócio com a BeGrow em São Luís, MA.",
       },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
+      { name: "author", content: "BeGrow" },
+      {
+        name: "keywords",
+        content:
+          "agência de marketing digital, BeGrow, marketing são luís, captação de clientes, posicionamento digital, tráfego pago maranhão",
+      },
+      { name: "theme-color", content: "#000000" }, // Sugestão: Alterar para a cor principal da paleta da marca
+
+      // Open Graph (Otimização essencial para WhatsApp, Instagram, LinkedIn e Facebook)
+      { property: "og:type", content: "website" },
+      { property: "og:locale", content: "pt_BR" },
+      { property: "og:site_name", content: "BeGrow" },
+      { property: "og:title", content: "BeGrow | Estratégia e Marketing Digital" },
       {
         property: "og:description",
         content:
-          "Grow Insights is a multi-client marketing analytics dashboard with AI-powered optimization suggestions.",
+          "Transformamos presença digital em um ativo de conversão. Estratégias validadas para escalar os resultados da sua empresa.",
       },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
+      { property: "og:url", content: "https://med.begrow.com.br/" },
+      {
+        property: "og:image",
+        content: "https://link-para-seu-bucket-ou-site/banner-og-begrow.png",
+      },
+      { property: "og:image:alt", content: "BeGrow - Resultados em Marketing Digital" },
+
+      // Twitter Cards (Mantido apenas para garantir o layout de imagem grande em apps como Slack/Discord/Telegram)
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "BeGrow | Estratégia e Marketing Digital" },
       {
         name: "twitter:description",
         content:
-          "Grow Insights is a multi-client marketing analytics dashboard with AI-powered optimization suggestions.",
-      },
-      {
-        property: "og:image",
-        content:
-          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/5fa5ee00-f09d-432a-a99b-30c75428b1a1/id-preview-3873bb99--d92fb429-7820-4ad3-8161-a655c3f4da17.lovable.app-1779043916392.png",
+          "Transformamos presença digital em um ativo de conversão. Estratégias validadas para escalar os resultados da sua empresa.",
       },
       {
         name: "twitter:image",
-        content:
-          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/5fa5ee00-f09d-432a-a99b-30c75428b1a1/id-preview-3873bb99--d92fb429-7820-4ad3-8161-a655c3f4da17.lovable.app-1779043916392.png",
+        content: "https://link-para-seu-bucket-ou-site/banner-og-begrow.png",
       },
+
+      // SEO Local (Garante autoridade para buscas na região)
+      { name: "geo.region", content: "BR-MA" },
+      { name: "geo.placename", content: "São Luís" },
+      { name: "geo.position", content: "-2.5297;-44.3028" },
+      { name: "ICBM", content: "-2.5297, -44.3028" },
     ],
     links: [
+      // Previne punições do Google por conteúdo duplicado apontando para a URL exata
+      { rel: "icon", type: "image/jpeg", href: beGrowLogo },
+      { rel: "canonical", href: "https://med.begrow.com.br/" },
       {
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
     ],
   }),
   shellComponent: RootShell,

@@ -1,12 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { ClientRow, Campaign } from "./analytics-types.ts";
-import {
-  dateRangeSchema,
-  attributionSchema,
-  attrToArray,
-  isPlaceholder,
-} from "./analytics.functions.ts";
+import { attrToArray, isPlaceholder } from "./analytics.functions.ts";
 import { getSupabaseServerClient } from "./supabase.ts";
 import {
   graphGet,
@@ -17,6 +12,8 @@ import {
 import { DialogDescription } from "@radix-ui/react-dialog";
 import { CampaignDetail } from "./analytics-types.ts";
 import { getMetaToken } from "./clientes.server.ts";
+import { dateRangeSchema } from "@/zod/dateRange.ts";
+import { attributionSchema } from "@/zod/attribution.ts";
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 // Campaign detail (drill-down)
 
@@ -82,8 +79,6 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       { fields: "id,name,status,daily_budget,lifetime_budget,objective" },
       token,
     );
-
-    console.log(`Debugg campain${meta}`);
 
     // Daily timeseries for this campaign. `status` is not a valid Ads Insights field;
     // status/budget metadata comes from the campaign object above.
@@ -193,7 +188,6 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       );
 
       const [adRows, adlinkResponse] = await Promise.all([adMetricsPromise, adLinksPromise]);
-      console.log(`Olha isso aqui rapidao${JSON.stringify(adRows)}`);
 
       const linksDicionario = new Map<string, string | null>();
       for (const ad of adlinkResponse.data) {

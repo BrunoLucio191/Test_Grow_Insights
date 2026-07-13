@@ -14,14 +14,12 @@ import { ClientSettingsDialog } from "@/components/begrow/ClientSettingsDialog";
 import { PaidTab } from "@/components/begrow/PaidTab";
 import OrganicTab from "@/components/begrow/OrganicTab";
 import { Toaster } from "@/components/ui/sonner";
-import {
-  validateClient,
-  DEFAULT_ATTRIBUTION,
-  type DateRange,
-  type AttributionWindow,
-} from "@/lib/analytics-types";
-import { TrendingUp, Radio } from "lucide-react";
+import { DEFAULT_ATTRIBUTION, type DateRange, type AttributionWindow } from "@/lib/analytics-types";
+import { validateClient } from "@/lib/utils";
+import { TrendingUp, Radio, Menu, Sidebar } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/utils";
+import { useSessionStorage } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -44,52 +42,43 @@ export const Route = createFileRoute("/")({
   }),
 });
 
-function defaultRange(): DateRange {
-  const to = new Date();
-  const from = new Date();
-  //from.setDate(from.getDate() - 13);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
-}
-
 function Dashboard() {
-  const qc = useQueryClient();
-  const fn = useServerFn(listClients);
-  const syncPaidFn = useServerFn(syncPaid);
-  const syncOrganicFn = useServerFn(syncOrganic);
-  const cacheStatusFn = useServerFn(getCacheStatus);
+  const queryClient = useQueryClient();
+  const listClientsFunction = useServerFn(listClients);
+  const syncPaidFunction = useServerFn(syncPaid);
+  const syncOrganicFunction = useServerFn(syncOrganic);
+  const cacheStatusFunction = useServerFn(getCacheStatus);
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
-    queryFn: () => fn(),
+    queryFn: () => listClientsFunction(),
   });
-
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [range, setRange] = useState<DateRange>({ from: "", to: "" });
-  const [attribution, setAttribution] = useState<AttributionWindow>(DEFAULT_ATTRIBUTION);
+  const [selectedId, setSelectedId] = useSessionStorage<string | null>("cliente_selecionado", null);
+  const [range, setRange] = useSessionStorage("meu_range", { from: "", to: "" });
+  const [attribution, setAttribution] = useSessionStorage<AttributionWindow>(
+    "minha_attr",
+    "7d click",
+  );
+  const [settingsOpen, setSettingsOpen] = useSessionStorage("menu_aberto", false);
+  const [sideBarOff, setSidebarOff] = useSessionStorage("sidebar_fechada", true);
   const [syncing, setSyncing] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({
     paid: "idle",
     organic: "idle",
   });
 
-  useEffect(() => {
-    if (clients?.length && !selectedId) setSelectedId(clients[0].id);
-  }, [clients, selectedId]);
+  const selected = clients?.find((client) => client.id === selectedId) ?? null;
 
-  const selected = clients?.find((c) => c.id === selectedId) ?? null;
-
-  // Sync client's default attribution when changing client
   useEffect(() => {
     if (selected?.attribution_window) {
       setAttribution(selected.attribution_window as AttributionWindow);
     } else {
       setAttribution(DEFAULT_ATTRIBUTION);
     }
-  }, [selected?.id, selected?.attribution_window]);
+  }, [selected?.id, selected?.attribution_window, setAttribution]);
 
   const { data: cacheStatus } = useQuery({
     queryKey: ["cache-status", selectedId, range.from, range.to, attribution],
-    queryFn: () => cacheStatusFn({ data: { clientId: selectedId!, range, attribution } }),
+    queryFn: () => cacheStatusFunction({ data: { clientId: selectedId!, range, attribution } }),
     enabled: !!selectedId,
     refetchInterval: 60_000,
   });
@@ -116,31 +105,32 @@ function Dashboard() {
     });
 
     const runPaid = v.paidOk
-      ? syncPaidFn({ data: { clientId: selectedId, range, attribution } })
+      ? syncPaidFunction({ data: { clientId: selectedId, range, attribution } })
           .then(() => {
             setSyncProgress((p) => ({ ...p, paid: "done" }));
-            qc.invalidateQueries({ queryKey: ["paid", selectedId] });
+            queryClient.invalidateQueries({ queryKey: ["paid", selectedId] });
           })
-          .catch((e: any) => {
+          .catch((error: unknown) => {
             setSyncProgress((p) => ({ ...p, paid: "error" }));
-            toast.error(`Pago: ${e?.message ?? "erro"}`);
+            toast.error(`Pago: ${getErrorMessage(error) ?? "erro"}`);
           })
       : Promise.resolve();
 
     const runOrganic = v.organicOk
-      ? syncOrganicFn({ data: { clientId: selectedId, range } })
+      ? syncOrganicFunction({ data: { clientId: selectedId, range } })
           .then(() => {
             setSyncProgress((p) => ({ ...p, organic: "done" }));
-            qc.invalidateQueries({ queryKey: ["organic", selectedId] });
+            queryClient.invalidateQueries({ queryKey: ["organic", selectedId] });
           })
-          .catch((e: any) => {
+          .catch((error: unknown) => {
+            console.log(`quero saber oq isso faz${error}`);
             setSyncProgress((p) => ({ ...p, organic: "error" }));
-            toast.error(`Orgânico: ${e?.message ?? "erro"}`);
+            toast.error(`Orgânico: ${getErrorMessage(error) ?? "erro"}`);
           })
       : Promise.resolve();
 
     await Promise.allSettled([runPaid, runOrganic]);
-    await qc.invalidateQueries({
+    await queryClient.invalidateQueries({
       queryKey: ["cache-status", selectedId, range.from, range.to],
     });
     toast.success("Sincronização concluída");
@@ -148,11 +138,21 @@ function Dashboard() {
     setTimeout(() => setSyncProgress({ paid: "idle", organic: "idle" }), 2500);
   };
 
+  function handleTurnSideBarOff(): void {
+    setSidebarOff((prev: boolean) => !prev);
+  }
+
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex relative h-screen overflow-hidden bg-background">
       <Toaster />
-      <ClientSidebar clients={clients ?? []} selectedId={selectedId} onSelect={setSelectedId} />
-      <main className="flex-1 flex flex-col overflow-x-hidden overflow-y-auto">
+      <ClientSidebar
+        clients={clients ?? []}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        isOpen={sideBarOff}
+      />
+
+      <main className="flex-1 relative z-50 flex flex-col overflow-x-hidden overflow-y-auto">
         {" "}
         {isLoading || !selected ? (
           <div className="p-8">
@@ -167,7 +167,7 @@ function Dashboard() {
           <>
             <>
               {/* 1. O HEADER (Fica no próprio quadrado, com z-30 pra sempre ficar por cima de tudo e 100% clicável) */}
-              <div className="relative z-30">
+              <div className="relative z-50">
                 <DashboardHeader
                   client={selected}
                   range={range}
@@ -179,6 +179,8 @@ function Dashboard() {
                   syncing={syncing}
                   syncProgress={syncProgress}
                   cacheStatus={cacheStatus ?? null}
+                  toggleSideBar={handleTurnSideBarOff}
+                  sideBarOff={sideBarOff}
                 />
               </div>
 
@@ -188,7 +190,7 @@ function Dashboard() {
                 onOpenChange={setSettingsOpen}
               />
 
-              <div className="relative z-10 px-6 py-6 flex-1">
+              <div className=" z-10 px-6 py-6 flex-1">
                 {(!range.from || !range.to) && (
                   <div className="absolute  inset-0 z-20 p-6">
                     <EmptyDateState className="h-full w-full  justify-center bg-background/60 backdrop-blur-sm" />
