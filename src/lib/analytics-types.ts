@@ -103,16 +103,16 @@ export type OrganicData = {
   topPosts: TopPost[];
 };
 
-export type AttributionWindow = "7d click,1d view" | "1d click,1d view" | "7d click" | "1d click";
+export type AttributionWindow = "7d_click,1d_view" | "1d_click,1d_view" | "7d_click" | "1d_click";
 
 export const ATTRIBUTION_OPTIONS: { value: AttributionWindow; label: string }[] = [
-  { value: "7d click,1d view", label: "7d clique + 1d view (padrão Meta)" },
-  { value: "1d click,1d view", label: "1d clique + 1d view" },
-  { value: "7d click", label: "7d clique apenas" },
-  { value: "1d click", label: "1d clique apenas" },
+  { value: "7d_click,1d_view", label: "7d_clique + 1d_view (padrão Meta)" },
+  { value: "1d_click,1d_view", label: "1d_clique + 1d_view" },
+  { value: "7d_click", label: "7d_clique apenas" },
+  { value: "1d_click", label: "1d_clique apenas" },
 ];
 
-export const DEFAULT_ATTRIBUTION: AttributionWindow = "7d click,1d view";
+export const DEFAULT_ATTRIBUTION: AttributionWindow = "7d_click,1d_view";
 
 export type ClientRow = {
   id: string;

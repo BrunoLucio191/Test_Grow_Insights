@@ -56,7 +56,7 @@ function Dashboard() {
   const [range, setRange] = useSessionStorage("meu_range", { from: "", to: "" });
   const [attribution, setAttribution] = useSessionStorage<AttributionWindow>(
     "minha_attr",
-    "7d click",
+    "7d_click",
   );
   const [settingsOpen, setSettingsOpen] = useSessionStorage("menu_aberto", false);
   const [sideBarOff, setSidebarOff] = useSessionStorage("sidebar_fechada", true);

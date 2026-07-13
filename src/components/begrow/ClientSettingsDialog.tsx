@@ -202,7 +202,7 @@ export function ClientSettingsDialog({ client, open, onOpenChange }: Props) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="default">7d clique + 1d view (padrão Meta)</SelectItem>
-                {ATTRIBUTION_OPTIONS.filter((o) => o.value !== "7d click,1d view").map((o) => (
+                {ATTRIBUTION_OPTIONS.filter((o) => o.value !== "7d_click,1d_view").map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>
