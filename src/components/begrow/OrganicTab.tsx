@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Users, Eye, Heart, UserPlus, Instagram, Facebook, MessageCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchOrganicData } from "@/lib/cache.server";
+import { fetchOrganicData } from "@/serverFunctions/cache.server";
 import type { DateRange } from "@/lib/analytics-types";
 import { KpiCard } from "./KpiCard";
 

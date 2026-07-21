@@ -15,12 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { updateClient } from "@/lib/clientes.server";
-import {
-  testMetaConnection,
-  type ConnectionTest,
-  type ConnectionCheck,
-} from "@/lib/campDetal.server";
+import { updateClient } from "@/serverFunctions/clientes.server";
+import { testMetaConnection } from "@/serverFunctions/campDetal.server";
+import { type ConnectionTest, type ConnectionCheck } from "@/lib/analytics-types";
 import { ATTRIBUTION_OPTIONS, type ClientRow, type AttributionWindow } from "@/lib/analytics-types";
 import {
   Select,

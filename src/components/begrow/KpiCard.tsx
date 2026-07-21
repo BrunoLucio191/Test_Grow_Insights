@@ -12,7 +12,7 @@ type Props = {
 
 export function KpiCard({ label, value, delta, trend = "neutral", icon: Icon }: Props) {
   return (
-    <Card className="relative overflow-hidden border-border/60 bg-card/60 p-5 backdrop-blur">
+    <Card className="transition-transform durantion-1000 hover:scale-105 relative overflow-hidden border bg-card/60  p-5 backdrop-blur">
       <div
         aria-hidden
         className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-20 blur-2xl"

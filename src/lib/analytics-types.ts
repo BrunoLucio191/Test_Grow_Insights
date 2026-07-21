@@ -1,5 +1,18 @@
 export type DateRange = { from: string; to: string };
 
+export type ClienteUpdatePayload = {
+  name?: string;
+  meta_ad_account_id?: string | null;
+  meta_page_id?: string | null;
+  ig_account_id?: string | null;
+  meta_access_token?: string | null;
+  conversion_event?: string | null;
+  attribution_window?: string | null;
+  updated_at: string;
+};
+export type User = {
+  display_name: string;
+};
 export type PaidKpis = {
   spend: number;
   revenue: number;
@@ -12,7 +25,7 @@ export type PaidKpis = {
   reach: number;
   frequency: number;
   conversions: number;
-  conversionRate: number; // conversions / clicks * 100
+  conversionRate: number;
 };
 
 export type TimeSeriesPoint = {
@@ -132,17 +145,26 @@ export type CampaignGroup = {
   campaign_ids: string[];
 };
 
-// Detect seed/placeholder IDs used in local/demo clients so we don't hit Meta with fake IDs.
-const PLACEHOLDER_RE = /^(?:act_0{6,}\d{1,3}|0+\d{0,3}|10{6,}\d{1,3}|170{6,}\d{1,3})$/;
-export function isPlaceholderId(id: string | null | undefined): boolean {
-  if (!id || !id.trim()) return true;
-  const value = id.trim();
-  return PLACEHOLDER_RE.test(value);
-}
-
 export type ClientValidation = {
   paidOk: boolean;
   organicOk: boolean;
   anyOk: boolean;
   missing: string[];
+};
+export type CacheStatus = {
+  paid: { fetchedAt: string | null; expiresAt: string | null };
+  organic: { fetchedAt: string | null; expiresAt: string | null };
+  ttlSeconds: number;
+};
+export type ConnectionCheck = {
+  ok: boolean;
+  label: string;
+  detail?: string;
+  error?: string;
+};
+export type ConnectionTest = {
+  tokenPresent: boolean;
+  paid: ConnectionCheck;
+  page: ConnectionCheck;
+  instagram: ConnectionCheck;
 };

@@ -1,10 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { AuthState, SignInSchema, UserMetaSchema } from "./auth.schema";
-import { create } from "domain";
 
 export const signIn = createServerFn()
-  .inputValidator(SignInSchema)
+  .validator(SignInSchema)
   .handler(async ({ data }) => {
     const { error } = await getSupabaseServerClient().auth.signInWithPassword({
       email: data.email,
@@ -20,7 +19,7 @@ export const signOut = createServerFn().handler(async () => {
   await getSupabaseServerClient().auth.signOut();
 });
 
-export const getUser = createServerFn().handler<AuthState>(async () => {
+export const getUser = createServerFn().handler(async (): Promise<AuthState> => {
   const supabase = getSupabaseServerClient();
 
   const { data } = await supabase.auth.getUser();

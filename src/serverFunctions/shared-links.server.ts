@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getSupabaseServerClient } from "./supabase";
+import { getSupabaseServerClient } from "../lib/supabase";
 
 const linkGeradoSchema = z.object({
   clientId: z.string().uuid(),
@@ -8,7 +8,7 @@ const linkGeradoSchema = z.object({
 });
 
 export const criarLinkCompartilhavel = createServerFn({ method: "POST" })
-  .inputValidator((d) => linkGeradoSchema.parse(d))
+  .validator((d) => linkGeradoSchema.parse(d))
   .handler(async ({ data }) => {
     const supaBaseLogin = getSupabaseServerClient();
 
@@ -30,7 +30,7 @@ export const criarLinkCompartilhavel = createServerFn({ method: "POST" })
   });
 
 export const buscarLinkCompartilhavel = createServerFn({ method: "GET" })
-  .inputValidator((token: string) => z.string().uuid().parse(token))
+  .validator((token: string) => z.string().uuid().parse(token))
   .handler(async ({ data: token }) => {
     const supaBase = getSupabaseServerClient();
 

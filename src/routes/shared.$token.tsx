@@ -8,9 +8,10 @@ import { PaidTab } from "../components/begrow/PaidTab";
 import OrganicTab from "../components/begrow/OrganicTab";
 import { TrendingUp, Radio } from "lucide-react";
 import { type DateRange, type AttributionWindow, ClientRow } from "@/lib/analytics-types";
-import { buscarLinkCompartilhavel } from "../lib/shared-links.server";
+import { buscarLinkCompartilhavel } from "../serverFunctions/shared-links.server";
 import { PaidData, PaidKpis, TopPost } from "@/lib/analytics-types";
 import { Loader2 } from "lucide-react";
+import { useDarkMode } from "@/hooks/dark-theme";
 
 export const Route = createFileRoute("/shared/$token")({
   component: Dashboard,
@@ -18,12 +19,11 @@ export const Route = createFileRoute("/shared/$token")({
     meta: [{ title: "Dashboard Compartilhado — BeGrow OS" }],
   }),
 });
-
 interface SharedDashboardPayload {
-  paidData: PaidData; // Substitua por 'PaidData' se tiver o tipo importado
+  paidData: PaidData;
   organic_data: {
-    kpis: PaidKpis; // Substitua por 'OrganicKpis'
-    topPosts: TopPost[]; // Substitua por 'TopPost[]'
+    kpis: PaidKpis;
+    topPosts: TopPost[];
   };
   meta: {
     clientId: string;
@@ -34,16 +34,15 @@ interface SharedDashboardPayload {
 }
 
 function Dashboard() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
 
   const { token } = Route.useParams();
   const buscarLinkFn = useServerFn(buscarLinkCompartilhavel);
 
-  // Estados locais para controlar o que o Header e as abas vão exibir
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
   const [attribution, setAttribution] = useState<AttributionWindow>("7d_click,1d_view");
+  const { theme } = useDarkMode();
 
-  // 3. Busca o snapshot usando o seu buscarLinkCompartilhavel
   const {
     data: rawSnapshot,
     isLoading,
@@ -53,29 +52,25 @@ function Dashboard() {
     queryFn: () => buscarLinkFn({ data: token }),
   });
 
-  // 2. AQUI ESTÁ A MÁGICA: Avisa o TypeScript qual é o formato real do dado
   const snapshot = rawSnapshot as SharedDashboardPayload | undefined;
 
-  // 4. MÁGICA: Alimenta o cache do React Query com o seu snapshot
   useEffect(() => {
     if (snapshot && snapshot.meta) {
       const { paidData, organic_data, meta } = snapshot;
 
-      // Atualiza os estados da tela com as datas em que o link foi gerado
       setRange(meta.range);
       setAttribution(meta.attribution);
 
-      // Alimenta o cache do Tráfego Pago usando a chave exata que o PaidTab espera
-      qc.setQueryData(
+      queryClient.setQueryData(
         ["paid", meta.clientId, meta.range.from, meta.range.to, meta.attribution],
         paidData,
       );
 
       // Alimenta o cache do Orgânico
-      qc.setQueryData(["organic_kpis", meta.clientId], organic_data.kpis);
-      qc.setQueryData(["organic_posts", meta.clientId], organic_data.topPosts);
+      queryClient.setQueryData(["organic_kpis", meta.clientId], organic_data.kpis);
+      queryClient.setQueryData(["organic_posts", meta.clientId], organic_data.topPosts);
     }
-  }, [snapshot, qc]);
+  }, [snapshot, queryClient]);
 
   if (isLoading)
     return (
@@ -86,7 +81,6 @@ function Dashboard() {
   if (error || !snapshot)
     return <div className="p-12 text-destructive">Link inválido, inexistente ou expirado.</div>;
 
-  // Monta um objeto de cliente fictício apenas para o Header renderizar o nome correto
   const mockClient: ClientRow = {
     id: snapshot.meta?.clientId,
     name: snapshot.meta?.clientName || "Cliente Compartilhado",
@@ -103,15 +97,20 @@ function Dashboard() {
           <DashboardHeader
             client={mockClient}
             range={range}
-            onRangeChange={() => {}} // Bloqueado para o cliente externo
+            onRangeChange={() => {}}
             attribution={attribution}
-            onAttributionChange={() => {}} // Bloqueado para o cliente externo
-            onSync={async () => {}} // Bloqueado
-            onOpenSettings={() => {}} // Bloqueado
+            onAttributionChange={() => {}}
+            onSync={async () => {}}
+            onOpenSettings={() => {}}
             syncing={false}
             syncProgress={{ paid: "idle", organic: "idle" }}
             cacheStatus={null}
             isShared={true}
+            sideBarOff={false}
+            toggleSideBar={() => {}}
+            buttonTabOff={false}
+            theme={theme}
+            toggleTheme={() => {}}
           />
         </div>
 
@@ -127,7 +126,6 @@ function Dashboard() {
             </TabsList>
 
             <TabsContent value="paid">
-              {/* Quando o PaidTab der o useQuery interno dele, os dados já vão estar no cache esperando por ele! */}
               <PaidTab
                 clientId={snapshot.meta.clientId}
                 clientName={mockClient.name}

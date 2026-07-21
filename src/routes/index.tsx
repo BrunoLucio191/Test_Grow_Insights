@@ -5,8 +5,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { syncPaid, syncOrganic, getCacheStatus } from "@/lib/syncClient";
-import { listClients } from "@/lib/clientes.server";
+import { syncPaid, syncOrganic, getCacheStatus } from "../serverFunctions/sync.server";
+import { listClients } from "@/serverFunctions/clientes.server";
 import { ClientSidebar } from "@/components/begrow/ClientSidebar";
 import { EmptyDateState } from "@/components/begrow/EmptyDateState";
 import { DashboardHeader, type SyncProgress } from "@/components/begrow/DashboardHeader";
@@ -14,13 +14,16 @@ import { ClientSettingsDialog } from "@/components/begrow/ClientSettingsDialog";
 import { PaidTab } from "@/components/begrow/PaidTab";
 import OrganicTab from "@/components/begrow/OrganicTab";
 import { Toaster } from "@/components/ui/sonner";
-import { DEFAULT_ATTRIBUTION, type DateRange, type AttributionWindow } from "@/lib/analytics-types";
+import { DEFAULT_ATTRIBUTION, type AttributionWindow } from "@/lib/analytics-types";
 import { validateClient } from "@/lib/utils";
-import { TrendingUp, Radio, Menu, Sidebar } from "lucide-react";
+import { TrendingUp, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/utils";
 import { useSessionStorage } from "@/lib/utils";
-
+import LoadingScreen from "@/components/begrow/loadingScreen";
+import { useDarkMode } from "@/hooks/dark-theme";
+import { getUser } from "@/serverFunctions/user.server";
+import { useValidSession } from "../hooks/use-logOut";
 export const Route = createFileRoute("/")({
   component: Dashboard,
   beforeLoad: ({ context }) => {
@@ -45,6 +48,7 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const queryClient = useQueryClient();
   const listClientsFunction = useServerFn(listClients);
+  const getUserNameById = useServerFn(getUser);
   const syncPaidFunction = useServerFn(syncPaid);
   const syncOrganicFunction = useServerFn(syncOrganic);
   const cacheStatusFunction = useServerFn(getCacheStatus);
@@ -65,8 +69,16 @@ function Dashboard() {
     paid: "idle",
     organic: "idle",
   });
+  const [isLoaded, setIsLoaded] = useState<boolean | null>(null);
+  const { theme, toggleTheme, checked } = useDarkMode();
 
   const selected = clients?.find((client) => client.id === selectedId) ?? null;
+
+  useEffect(() => {
+    setInterval(() => {
+      setIsLoaded(true);
+    }, 800);
+  }, [checked]);
 
   useEffect(() => {
     if (selected?.attribution_window) {
@@ -81,6 +93,11 @@ function Dashboard() {
     queryFn: () => cacheStatusFunction({ data: { clientId: selectedId!, range, attribution } }),
     enabled: !!selectedId,
     refetchInterval: 60_000,
+  });
+
+  const { data: userName } = useQuery({
+    queryKey: ["user-name"],
+    queryFn: () => getUserNameById(),
   });
 
   const onSync = async () => {
@@ -123,7 +140,6 @@ function Dashboard() {
             queryClient.invalidateQueries({ queryKey: ["organic", selectedId] });
           })
           .catch((error: unknown) => {
-            console.log(`quero saber oq isso faz${error}`);
             setSyncProgress((p) => ({ ...p, organic: "error" }));
             toast.error(`Orgânico: ${getErrorMessage(error) ?? "erro"}`);
           })
@@ -138,99 +154,112 @@ function Dashboard() {
     setTimeout(() => setSyncProgress({ paid: "idle", organic: "idle" }), 2500);
   };
 
-  function handleTurnSideBarOff(): void {
+  function handleTurnSideBarOff(event: React.MouseEvent<HTMLButtonElement>): void {
+    event.stopPropagation();
     setSidebarOff((prev: boolean) => !prev);
   }
+  //custom hook for logginf out
+  useValidSession();
 
   return (
-    <div className="flex relative h-screen overflow-hidden bg-background">
-      <Toaster />
-      <ClientSidebar
-        clients={clients ?? []}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        isOpen={sideBarOff}
-      />
-
-      <main className="flex-1 relative z-50 flex flex-col overflow-x-hidden overflow-y-auto">
-        {" "}
-        {isLoading || !selected ? (
-          <div className="p-8">
-            <Skeleton className="h-7 w-64" />
-            <div className="mt-8 grid gap-4 md:grid-cols-3 xl:grid-cols-5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-32" />
-              ))}
-            </div>
-          </div>
+    <>
+      <div>
+        {!isLoaded ? (
+          <LoadingScreen />
         ) : (
-          <>
-            <>
-              {/* 1. O HEADER (Fica no próprio quadrado, com z-30 pra sempre ficar por cima de tudo e 100% clicável) */}
-              <div className="relative z-50">
-                <DashboardHeader
-                  client={selected}
-                  range={range}
-                  onRangeChange={setRange}
-                  attribution={attribution}
-                  onAttributionChange={setAttribution}
-                  onSync={onSync}
-                  onOpenSettings={() => setSettingsOpen(true)}
-                  syncing={syncing}
-                  syncProgress={syncProgress}
-                  cacheStatus={cacheStatus ?? null}
-                  toggleSideBar={handleTurnSideBarOff}
-                  sideBarOff={sideBarOff}
-                />
-              </div>
+          <div className="flex  h-screen overflow-hidden bg-background">
+            {}
+            <Toaster />
+            <ClientSidebar
+              clients={clients ?? []}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              isOpen={sideBarOff}
+              userName={userName?.display_name}
+            />
 
-              <ClientSettingsDialog
-                client={selected}
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-              />
-
-              <div className=" z-10 px-6 py-6 flex-1">
-                {(!range.from || !range.to) && (
-                  <div className="absolute  inset-0 z-20 p-6">
-                    <EmptyDateState className="h-full w-full  justify-center bg-background/60 backdrop-blur-sm" />
+            <main className="flex-1 relative z-50 flex flex-col overflow-x-hidden overflow-y-auto">
+              {isLoading || !selected ? (
+                <div className="p-8">
+                  <Skeleton className="h-7 w-64" />
+                  <div className="mt-8 grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Skeleton key={i} className="h-32" />
+                    ))}
                   </div>
-                )}
-
-                <div
-                  className={cn(
-                    "transition-all duration-500",
-                    (!range.from || !range.to) && "pointer-events-none opacity-30 blur-[2px]",
-                  )}
-                >
-                  <Tabs defaultValue="paid" className="space-y-6">
-                    <TabsList className="bg-card/60">
-                      <TabsTrigger value="paid" className="gap-2">
-                        <TrendingUp className="h-4 w-4" /> Tráfego Pago
-                      </TabsTrigger>
-                      <TabsTrigger value="organic" className="gap-2">
-                        <Radio className="h-4 w-4" /> Orgânico
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="paid">
-                      <PaidTab
-                        clientId={selected.id}
-                        clientName={selected.name}
-                        range={range}
-                        attribution={attribution}
-                      />
-                    </TabsContent>
-                    <TabsContent value="organic">
-                      <OrganicTab clientId={selected.id} range={range} />
-                    </TabsContent>
-                    <TabsContent value="ai"></TabsContent>
-                  </Tabs>
                 </div>
-              </div>
-            </>
-          </>
+              ) : (
+                <>
+                  <>
+                    <div className="relative z-50">
+                      <DashboardHeader
+                        client={selected}
+                        range={range}
+                        onRangeChange={setRange}
+                        attribution={attribution}
+                        onAttributionChange={setAttribution}
+                        onSync={onSync}
+                        onOpenSettings={() => setSettingsOpen(true)}
+                        syncing={syncing}
+                        syncProgress={syncProgress}
+                        cacheStatus={cacheStatus ?? null}
+                        toggleSideBar={handleTurnSideBarOff}
+                        buttonTabOff={true}
+                        sideBarOff={false}
+                        theme={theme}
+                        toggleTheme={toggleTheme}
+                      />
+                    </div>
+
+                    <ClientSettingsDialog
+                      client={selected}
+                      open={settingsOpen}
+                      onOpenChange={setSettingsOpen}
+                    />
+
+                    <div className=" z-10 px-6 py-6 flex-1">
+                      {(!range.from || !range.to) && (
+                        <div className="absolute inset-0 z-20 p-6">
+                          <EmptyDateState className="h-full w-full  justify-center  " />
+                        </div>
+                      )}
+                      <div
+                        className={cn(
+                          "transition-all duration-500",
+                          (!range.from || !range.to) && "pointer-events-none opacity-30 blur-[2px]",
+                        )}
+                      >
+                        <Tabs defaultValue="paid" className="space-y-6">
+                          <TabsList className="bg-card/60">
+                            <TabsTrigger value="paid" className="gap-2">
+                              <TrendingUp className="h-4 w-4" /> Tráfego Pago
+                            </TabsTrigger>
+                            <TabsTrigger value="organic" className="gap-2">
+                              <Radio className="h-4 w-4" /> Orgânico
+                            </TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="paid">
+                            <PaidTab
+                              clientId={selected.id}
+                              clientName={selected.name}
+                              range={range}
+                              attribution={attribution}
+                            />
+                          </TabsContent>
+                          <TabsContent value="organic">
+                            <OrganicTab clientId={selected.id} range={range} />
+                          </TabsContent>
+                          <TabsContent value="ai"></TabsContent>
+                        </Tabs>
+                      </div>
+                    </div>
+                  </>
+                </>
+              )}
+            </main>
+          </div>
         )}
-      </main>
-    </div>
+      </div>
+    </>
   );
 }

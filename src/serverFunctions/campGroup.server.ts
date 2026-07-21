@@ -1,22 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getSupabaseServerClient } from "./supabase.ts";
-import { CampaignGroup } from "./analytics-types.ts";
+import { getSupabaseServerClient } from "@/lib/supabase.ts";
+import { CampaignGroup } from "@/lib/analytics-types.ts";
 
 //Campaign Groups
-
 export const listCampaignGroups = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .validator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<CampaignGroup[]> => {
     const supabaseAuth = getSupabaseServerClient();
-    // Verifica qual usuário está enviando a requisição para bater com a tabela client_users
-    const { data: authData, error: authError } = await supabaseAuth.auth.getUser();
 
-    if (authError) {
-      console.error(authError.message);
-    } else {
-      console.log(authData.user?.id);
-    }
     const { data: rows, error } = await supabaseAuth
       .from("campaign_groups")
       .select("id, client_id, name, campaign_ids")
@@ -28,11 +20,11 @@ export const listCampaignGroups = createServerFn({ method: "POST" })
       return [];
     }
 
-    return (rows as import("./analytics-types.ts").CampaignGroup[]) ?? [];
+    return (rows as CampaignGroup[]) ?? [];
   });
 
 export const upsertCampaignGroup = createServerFn({ method: "POST" })
-  .inputValidator((d) =>
+  .validator((d) =>
     z
       .object({
         id: z.string().uuid().optional(),
@@ -42,7 +34,7 @@ export const upsertCampaignGroup = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data }): Promise<import("./analytics-types.ts").CampaignGroup> => {
+  .handler(async ({ data }): Promise<CampaignGroup> => {
     const supabaseAuth = getSupabaseServerClient();
 
     const payload = {
@@ -58,11 +50,11 @@ export const upsertCampaignGroup = createServerFn({ method: "POST" })
 
     const { data: row, error } = await query.select("id, client_id, name, campaign_ids").single();
     if (error) throw new Error(error.message);
-    return row as import("./analytics-types.ts").CampaignGroup;
+    return row as CampaignGroup;
   });
 
 export const deleteCampaignGroup = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const supabaseAuth = getSupabaseServerClient();
 

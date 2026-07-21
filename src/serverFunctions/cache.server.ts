@@ -1,13 +1,18 @@
 import { Json } from "@/integrations/supabase/types";
-import { CACHE_TTL_SECONDS, EMPTY_ORGANIC, isPlaceholder } from "./analytics.functions.ts";
+import { isPlaceholder } from "@/lib/utils.ts";
+import { EMPTY_ORGANIC } from "@/constantes/metaDefaults.ts";
+import { CACHE_DURATION_IN_SECONDS } from "@/constantes/metaDefaults.ts";
 import { clientRangeSchema } from "@/zod/clientRange.ts";
-import { getSupabaseServerClient } from "./supabase.ts";
+import { getSupabaseServerClient } from "../lib/supabase.ts";
 import { createServerFn } from "@tanstack/react-start";
-import type { ClientRow, OrganicData, TopPost } from "./analytics-types.ts";
+import type { ClientRow, DateRange, OrganicData, TopPost } from "../lib/analytics-types.ts";
 import { graphGet } from "./metaGraph.server.ts";
 import { getMetaToken } from "./clientes.server.ts";
+import { cliplingOrganicDate } from "../lib/utils.ts";
+import { use } from "react";
 /* eslint-disable  @typescript-eslint/no-explicit-any */
-//Cache helpers
+
+//TODO: ajustar isso pra corrigir o bug do cache
 export async function readCache<T>(
   clientId: string,
   scope: string,
@@ -17,6 +22,7 @@ export async function readCache<T>(
   if (force) return null;
 
   const supabaseAuth = getSupabaseServerClient();
+
   const { data, error } = await supabaseAuth
     .from("meta_cache")
     .select("payload, fetched_at")
@@ -26,22 +32,23 @@ export async function readCache<T>(
     .eq("range_to", range.to)
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    console.log(error);
+    return null;
+  }
 
   const ageSec = (Date.now() - new Date(data.fetched_at).getTime()) / 1000;
-  if (ageSec > CACHE_TTL_SECONDS) return null;
+  if (ageSec > CACHE_DURATION_IN_SECONDS) return null;
 
   return data.payload as T;
 }
 export async function writeCache(
   clientId: string,
   scope: string,
-  range: { from: string; to: string },
+  range: DateRange,
   payload: unknown,
 ): Promise<void> {
   const supabaseAuth = getSupabaseServerClient();
-
-  //pegar user_id
 
   const {
     data: { user },
@@ -122,6 +129,8 @@ export async function fetchOrganicReal(
     }
   }
 
+  if (new Date(range.from).getTime() / 1000 - new Date(range.to).getTime() / 1000)
+    console.log(Math.floor(new Date(range.from).getTime() / 1000).toString());
   // Facebook Page insights — métrica granular com try/catch individual
   if (client.meta_page_id) {
     const tryMetric = async (metric: string) => {
@@ -203,11 +212,16 @@ export async function fetchOrganicReal(
       try {
         const r = await graphGet<{ data: unknown[] }>(
           `/${client.ig_account_id}/insights`,
-          { ...params, since: range.from, until: range.to },
+          {
+            ...params,
+            since: Math.floor(new Date(range.from).getTime() / 1000).toString(),
+            until: Math.floor(new Date(range.to).getTime() / 1000).toString(),
+          },
           token,
         );
         return r.data ?? [];
       } catch (e) {
+        console.log(range.from, range.to);
         console.warn(
           `[organic][ig] insights ${JSON.stringify(params)} falhou:`,
           (e as Error).message,
@@ -281,8 +295,10 @@ export async function fetchOrganicReal(
 }
 
 export const fetchOrganicData = createServerFn({ method: "POST" })
-  .inputValidator((d) => clientRangeSchema.parse(d))
+  .validator((d) => clientRangeSchema.parse(d))
   .handler(async ({ data }): Promise<OrganicData> => {
+    const clippedDate = cliplingOrganicDate(data.range);
+
     const cached = await readCache<OrganicData>(data.clientId, "organic", data.range, false);
     if (cached) return cached;
 
@@ -299,8 +315,8 @@ export const fetchOrganicData = createServerFn({ method: "POST" })
     if (isPlaceholder(c.meta_page_id) && isPlaceholder(c.ig_account_id)) return EMPTY_ORGANIC;
 
     try {
-      const fresh = await fetchOrganicReal(c, data.range);
-      await writeCache(data.clientId, "organic", data.range, fresh);
+      const fresh = await fetchOrganicReal(c, clippedDate);
+      await writeCache(data.clientId, "organic", clippedDate, fresh);
       return fresh;
     } catch (error) {
       console.error("fetchOrganicReal failed:", error);
@@ -309,8 +325,8 @@ export const fetchOrganicData = createServerFn({ method: "POST" })
         .select("payload")
         .eq("client_id", data.clientId)
         .eq("scope", "organic")
-        .eq("range_from", data.range.from)
-        .eq("range_to", data.range.to)
+        .eq("range_from", clippedDate.from)
+        .eq("range_to", clippedDate.to)
         .maybeSingle();
       if (stale.data) return stale.data.payload as OrganicData;
       throw error;

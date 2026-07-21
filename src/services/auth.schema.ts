@@ -20,6 +20,6 @@ export type AuthState =
       isAuthenticated: true;
       user: {
         email: string | undefined;
-        meta: UserMeta;
+        meta: UserMeta | undefined;
       };
     };

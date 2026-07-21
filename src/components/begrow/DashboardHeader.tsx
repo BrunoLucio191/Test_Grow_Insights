@@ -1,4 +1,4 @@
-import { SetStateAction, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -24,9 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn, useSessionStorage } from "@/lib/utils";
 import {
-  ATTRIBUTION_OPTIONS,
   type DateRange,
   type ClientRow,
   type AttributionWindow,
@@ -35,12 +34,22 @@ import {
   TopPost,
 } from "@/lib/analytics-types";
 import { validateClient } from "@/lib/utils";
-import type { CacheStatus } from "@/lib/syncClient";
+import type { CacheStatus } from "@/lib/analytics-types";
 import { useQueryClient } from "@tanstack/react-query";
 import { OrganicData } from "../../lib/analytics-types";
-import { criarLinkCompartilhavel } from "../../lib/shared-links.server";
-import { getSupabaseServerClient } from "../../lib/supabase";
+import { criarLinkCompartilhavel } from "../../serverFunctions/shared-links.server";
 import { Menu } from "lucide-react";
+import { toast } from "sonner";
+import { MoonIcon } from "../ui/moon-icon";
+import { SunIcon } from "../ui/sun-icon";
+
+const ATTRIBUTION_OPTIONS: { value: AttributionWindow; label: string }[] = [
+  { value: "7d_click,1d_view", label: "7 dia clique + 1 dia view (padrão Meta)" },
+  { value: "1d_click,1d_view", label: "1 dia clique + 1 dia view" },
+  { value: "7d_click", label: "7 dia clique apenas" },
+  { value: "1d_click", label: "1 dia clique apenas" },
+];
+
 export type SyncProgress = {
   paid: "idle" | "running" | "done" | "error";
   organic: "idle" | "running" | "done" | "error";
@@ -58,8 +67,11 @@ type Props = {
   syncProgress?: SyncProgress;
   cacheStatus?: CacheStatus | null;
   isShared?: boolean;
-  toggleSideBar: () => void;
+  toggleSideBar: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  buttonTabOff: boolean;
   sideBarOff: boolean;
+  theme: string;
+  toggleTheme: () => void;
 };
 
 function ScopePill({
@@ -120,6 +132,7 @@ function CacheLine({
   }
   const fetched = new Date(fetchedAt).getTime();
   const expires = new Date(expiresAt).getTime();
+
   const remainingMs = Math.max(0, expires - now);
   const pct = Math.max(0, Math.min(100, ((expires - now) / (ttlSeconds * 1000)) * 100));
   const expired = remainingMs <= 0;
@@ -161,14 +174,16 @@ export function DashboardHeader({
   cacheStatus,
   isShared = false,
   toggleSideBar,
+  buttonTabOff,
   sideBarOff,
+  theme,
+  toggleTheme,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const queryClient = useQueryClient();
+  const hasValidRange = Boolean(range?.from && range?.to);
 
-  //const from = range.from ? new Date(range.from) : undefined;
-  //const to = range.to ? new Date(range.to) : undefined;
   const validation = validateClient(client);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -181,10 +196,19 @@ export function DashboardHeader({
     return new Date(year, month - 1, day);
   };
 
-  // 2. Use a função para ler o que vem do Pai
+  const themeButton =
+    theme == "dark" ? (
+      <Button variant="outline" onClick={toggleTheme}>
+        <SunIcon />
+      </Button>
+    ) : (
+      <Button variant="outline" onClick={toggleTheme}>
+        <MoonIcon />
+      </Button>
+    );
+
   const from = parseLocal(range.from);
   const to = parseLocal(range.to);
-  const Data = { from: from?.toString, to: to?.toString };
 
   //pega payload e salva ele o server
   const handleShare = async () => {
@@ -204,7 +228,6 @@ export function DashboardHeader({
       topPosts: posts || [],
     };
 
-    // GUArDAR OS METADADOS AQUI DENTRO DO PAYLOAD
     const payload = {
       paidData,
       organic_data,
@@ -221,30 +244,37 @@ export function DashboardHeader({
       return;
     }
 
-    // Chamar a sua função existente do servidor
     const token = await criarLinkCompartilhavel({
       data: {
         clientId: client.id,
-        payload: payload, // Seu z.any() vai aceitar isso perfeitamente
+        payload: payload,
       },
     });
 
     const linkCompleto = `${window.location.origin}/shared/${token}`;
     await navigator.clipboard.writeText(linkCompleto);
+    toast.success("Link Copiada");
   };
+
+  function handleNoTimeSelected(): void {
+    toast.error("Selecione um Intervalo de Tempo!");
+  }
   return (
     <header className="flex flex-col gap-4 border-b border-border/60 bg-background/60 px-6 py-5 backdrop-blur">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
-          <Button
-            variant="outline"
-            className={` flex  border gap-4 mt-2 bg-background/30 
+          {buttonTabOff && (
+            <Button
+              variant="outline"
+              className={` flex  border gap-4 mt-2 bg-background/30 
             backdrop-blur  w-10 h-10 rounded-full items-center 
             justify-center `}
-            onClick={() => toggleSideBar()}
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
+              onClick={toggleSideBar}
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+          )}
+
           <div className={`min-w-0 `}>
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Cliente ativo
@@ -259,9 +289,9 @@ export function DashboardHeader({
             </h1>
           </div>
         </div>
-
         {!isShared && (
           <div className="flex flex-wrap items-center gap-2">
+            {themeButton}
             {from && (
               <Button variant="outline" onClick={handleShare}>
                 <Share className="h-4 w-4" />
@@ -309,8 +339,8 @@ export function DashboardHeader({
               value={attribution}
               onValueChange={(v) => onAttributionChange(v as AttributionWindow)}
             >
-              <SelectTrigger className="w-[230hpx] gap-2">
-                <Target className="h-4 w-4 text-muted-foreground" />
+              <SelectTrigger className="w-[230hpx] gap-2 hover:bg-accent hover:text-accent-foreground">
+                <Target className="h-4 w-4 text-mut ed-foreground" />
                 <SelectValue placeholder="Atribuição" />
               </SelectTrigger>
               <SelectContent>
@@ -321,11 +351,17 @@ export function DashboardHeader({
                 ))}
               </SelectContent>
             </Select>
-
-            <Button onClick={onSync} disabled={syncing} className="gap-2">
-              <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
-              Sincronizar dados
-            </Button>
+            {hasValidRange ? (
+              <Button onClick={onSync} disabled={syncing} className="gap-2">
+                <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+                Sincronizar dados
+              </Button>
+            ) : (
+              <Button onClick={handleNoTimeSelected} disabled={syncing} className="gap-2">
+                <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+                Sincronizar dados
+              </Button>
+            )}
           </div>
         )}
       </div>

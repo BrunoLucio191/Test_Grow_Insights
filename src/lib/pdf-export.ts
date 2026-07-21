@@ -15,7 +15,7 @@ export type PdfReportInput = {
   paid: PaidData;
   aiMarkdown?: string | null;
   chartElement?: HTMLElement | null;
-  campaigns?: Campaign[]; // override (e.g., with grouping applied)
+  campaigns?: Campaign[];
 };
 
 export async function exportCampaignPdf(input: PdfReportInput): Promise<void> {
@@ -27,14 +27,14 @@ export async function exportCampaignPdf(input: PdfReportInput): Promise<void> {
   // Header
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text(`Relatório de Campanhas — ${input.clientName}`, margin, y);
+  doc.text(`Relatório de Campanhas - ${input.clientName}`, margin, y);
   y += 22;
 
   doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.setTextColor(110);
   doc.text(
-    `Período: ${input.range.from} → ${input.range.to}  ·  Atribuição: ${input.attribution}  ·  Gerado em ${new Date().toLocaleString("pt-BR")}`,
+    `Período: ${input.range.from} - ${input.range.to}  /  Atribuição: ${input.attribution}  /  Gerado em ${new Date().toLocaleString("pt-BR")}`,
     margin,
     y,
   );
@@ -59,11 +59,12 @@ export async function exportCampaignPdf(input: PdfReportInput): Promise<void> {
   ];
   autoTable(doc, {
     startY: y,
-    head: [["Métrica", "Valor", "Métrica", "Valor"]],
+    head: [["Métrica", "Valor"]],
     body: chunkPairs(kpiRows),
     theme: "grid",
-    styles: { fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [30, 41, 59] },
+    styles: { fontSize: 9, cellPadding: 5 },
+    headStyles: { fillColor: [30, 41, 59], halign: "center" },
+    columnStyles: { 1: { halign: "center" } },
     margin: { left: margin, right: margin },
   });
   y = (doc as any).lastAutoTable.finalY + 14;
@@ -71,20 +72,18 @@ export async function exportCampaignPdf(input: PdfReportInput): Promise<void> {
   // Chart capture
   if (input.chartElement) {
     try {
-      const canvas = await html2canvas(input.chartElement, {
-        backgroundColor: "#ffffff",
-        scale: 2,
-      });
+      const canvas = await html2canvas(input.chartElement);
+      canvas.style.filter = "brightness(0)";
       const img = canvas.toDataURL("image/png");
       const imgW = pageW - margin * 2;
       const imgH = (canvas.height / canvas.width) * imgW;
       if (y + imgH > doc.internal.pageSize.getHeight() - margin) {
         doc.addPage();
-        y = margin;
+        y = margin + 10;
       }
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
-      doc.text("Evolução diária", margin, y);
+      doc.text("Evolução diária", margin + 3, y);
       y += 12;
       doc.addImage(img, "PNG", margin, y, imgW, imgH);
       y += imgH + 16;
@@ -124,40 +123,20 @@ export async function exportCampaignPdf(input: PdfReportInput): Promise<void> {
     y = (doc as any).lastAutoTable.finalY + 14;
   }
 
-  // AI markdown section
-  if (input.aiMarkdown && input.aiMarkdown.trim()) {
-    doc.addPage();
-    y = margin;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("Recomendações da IA", margin, y);
-    y += 18;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    const text = stripMarkdown(input.aiMarkdown);
-    const lines = doc.splitTextToSize(text, pageW - margin * 2);
-    const pageH = doc.internal.pageSize.getHeight();
-    for (const line of lines) {
-      if (y > pageH - margin) {
-        doc.addPage();
-        y = margin;
-      }
-      doc.text(line, margin, y);
-      y += 13;
-    }
-  }
-
   const filename = `relatorio-${slugify(input.clientName)}-${input.range.from}-a-${input.range.to}.pdf`;
   doc.save(filename);
 }
 
 function chunkPairs(rows: [string, string][]): string[][] {
   const out: string[][] = [];
+  console.log(rows.length);
   for (let i = 0; i < rows.length; i += 2) {
     const a = rows[i];
     const b = rows[i + 1] ?? ["", ""];
-    out.push([a[0], a[1], b[0], b[1]]);
+    out.push([a[0], a[1]]);
+    out.push([b[0], b[1]]);
   }
+  console.log(out);
   return out;
 }
 

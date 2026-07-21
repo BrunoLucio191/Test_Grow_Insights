@@ -1,13 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { ClientRow, PaidData, Campaign, TimeSeriesPoint } from "./analytics-types.ts";
-import { attrToArray, scopeKey, isPlaceholder, EMPTY_PAID } from "./analytics.functions.ts";
+import type { ClientRow, PaidData, Campaign, TimeSeriesPoint } from "../lib/analytics-types.ts";
+import { attrToArray, scopeKey, isPlaceholder } from "@/lib/utils.ts";
+import { EMPTY_PAID } from "@/constantes/metaDefaults.ts";
 import { clientRangeSchema } from "@/zod/clientRange.ts";
-import { getSupabaseServerClient } from "./supabase.ts";
+import { getSupabaseServerClient } from "../lib/supabase.ts";
 import { readCache, writeCache } from "./cache.server.ts";
-import { graphGet, MetaAction, pickConversionType } from "./metaGraph.server.ts";
-import { string } from "zod";
-import { DateRange } from "./analytics-types.ts";
-import { getMetaToken } from "./clientes.server.ts";
+import { graphGet, MetaAction, pickConversionType } from "../serverFunctions/metaGraph.server.ts";
+import { DateRange } from "../lib/analytics-types.ts";
+import { calculateDays } from "../lib/utils.ts";
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 // Pago (Meta Ads)
 
@@ -30,13 +30,14 @@ export async function fetchMetaAdsReal(
   const timeRange = JSON.stringify({ since: range.from, until: range.to });
   const attrChoice = attributionOverride ?? client.attribution_window ?? "7d_click,1d_view";
   const attributionWindows = JSON.stringify(attrToArray(attrChoice));
+  const timeIncrement = calculateDays(range);
 
   // Single insights call: per-campaign per-day rows with raw actions/action_values.
   const insights = await graphGet<{ data: any[] }>(
     `/${account}/insights`,
     {
       time_range: timeRange,
-      time_increment: "1",
+      time_increment: timeIncrement,
       level: "campaign",
       action_attribution_windows: attributionWindows,
       fields:
@@ -240,7 +241,7 @@ export async function fetchMetaAdsReal(
 
 //pega dados do clinte do banco de dados
 export const fetchMetaAdsData = createServerFn({ method: "POST" })
-  .inputValidator((data) => clientRangeSchema.parse(data))
+  .validator((data) => clientRangeSchema.parse(data))
   .handler(async ({ data }): Promise<PaidData> => {
     const supabaseAuth = getSupabaseServerClient();
     //pega data do cliente do SupaBase

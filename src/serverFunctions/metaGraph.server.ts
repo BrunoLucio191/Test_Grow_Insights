@@ -1,6 +1,6 @@
-import { GRAPH_API } from "./analytics.functions";
+import { GRAPH_API } from "@/constantes/metaDefaults";
 
-// Função de auxilio apra montar url
+// Função de auxilio para montar url (agora com Paginação Automática)
 export async function graphGet<Type>(
   path: string,
   params: Record<string, string>,
@@ -9,31 +9,54 @@ export async function graphGet<Type>(
   const url = new URL(`${GRAPH_API}${path}`);
 
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-
   url.searchParams.set("access_token", token);
 
-  const res = await fetch(url.toString());
+  let currentUrl: string | null = url.toString();
+  let firstResponse: Record<string, unknown> | null = null;
+  const accumulatedData: unknown[] = [];
+  let isPaginatedList = false;
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Meta API ${res.status}: ${body.slice(0, 300)}`);
+  while (currentUrl) {
+    const res = await fetch(currentUrl);
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Meta API ${res.status}: ${body.slice(0, 300)}`);
+    }
+
+    const json = (await res.json()) as Record<string, unknown>;
+
+    if (!firstResponse) {
+      firstResponse = json;
+    }
+
+    if (json && Array.isArray(json.data)) {
+      isPaginatedList = true;
+      accumulatedData.push(...json.data);
+    } else {
+      break;
+    }
+
+    const paging = json.paging as { next?: string } | undefined;
+    if (paging && paging.next) {
+      currentUrl = paging.next;
+    } else {
+      currentUrl = null;
+    }
   }
 
-  return res.json() as Promise<Type>;
+  if (isPaginatedList && firstResponse) firstResponse.data = accumulatedData;
+
+  return firstResponse as Type;
 }
 
 export type MetaAction = { action_type: string; value: string };
-/** Extracts numeric value for a specific action_type from a Meta actions/action_values array. */
 export function extractMetaActionValue(arr: MetaAction[] | undefined, actionType: string): number {
   if (!arr) return 0;
   const hit = arr.find((a) => a.action_type === actionType);
   return hit ? parseFloat(hit.value) || 0 : 0;
 }
-/**
- * Eventos de conversão ordenados por prioridade — espelha o que o Gerenciador
- * de Anúncios mostra como "Resultados" na maioria dos objetivos focados em
- * conversão (compra/lead). Caímos para link_click apenas se nada acima existir.
- */
+
 const CONVERSION_PRIORITY = [
   "omni_purchase",
   "offsite_conversion.fb_pixel_purchase",
@@ -46,7 +69,7 @@ const CONVERSION_PRIORITY = [
   "offsite_conversion.fb_pixel_complete_registration",
   "link_click",
 ] as const;
-/** Picks the dominant conversion type from an aggregated list of actions. */
+
 export function pickConversionType(
   aggregated: Map<string, number>,
   override?: string | null,

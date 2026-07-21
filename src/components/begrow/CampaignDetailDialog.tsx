@@ -36,7 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { fetchCampaignDetail } from "@/lib/campDetal.server";
+import { fetchCampaignDetail } from "@/serverFunctions/campDetal.server";
 import type { Campaign, DateRange, AttributionWindow } from "@/lib/analytics-types";
 
 const fmt = (n: number, opts: Intl.NumberFormatOptions = {}) =>

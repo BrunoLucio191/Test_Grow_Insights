@@ -1,22 +1,28 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { ClientRow, Campaign } from "./analytics-types.ts";
-import { attrToArray, isPlaceholder } from "./analytics.functions.ts";
-import { getSupabaseServerClient } from "./supabase.ts";
+import type {
+  ClientRow,
+  Campaign,
+  AdRow,
+  ConnectionCheck,
+  ConnectionTest,
+} from "../lib/analytics-types.ts";
+import { attrToArray, isPlaceholder } from "@/lib/utils.ts";
+import { getSupabaseServerClient } from "../lib/supabase.ts";
 import {
   graphGet,
   MetaAction,
   pickConversionType,
   extractMetaActionValue,
 } from "./metaGraph.server.ts";
-import { DialogDescription } from "@radix-ui/react-dialog";
-import { CampaignDetail } from "./analytics-types.ts";
+import { CampaignDetail } from "../lib/analytics-types.ts";
 import { getMetaToken } from "./clientes.server.ts";
 import { dateRangeSchema } from "@/zod/dateRange.ts";
 import { attributionSchema } from "@/zod/attribution.ts";
+import { calculateDays } from "../lib/utils.ts";
 /* eslint-disable  @typescript-eslint/no-explicit-any */
-// Campaign detail (drill-down)
 
+// Campaign detail (drill-down)
 function extractPostLink(creative: any): string | null {
   if (!creative) return null;
 
@@ -30,7 +36,6 @@ function extractPostLink(creative: any): string | null {
     if (parts.length === 2) {
       const pageId = parts[0];
       const postId = parts[1];
-      // Montamos o link oficial do Facebook na mão
       return `https://www.facebook.com/${pageId}/posts/${postId}`;
     }
   }
@@ -39,7 +44,7 @@ function extractPostLink(creative: any): string | null {
 }
 
 export const fetchCampaignDetail = createServerFn({ method: "POST" })
-  .inputValidator((d) =>
+  .validator((d) =>
     z
       .object({
         clientId: z.string().uuid(),
@@ -79,14 +84,13 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       { fields: "id,name,status,daily_budget,lifetime_budget,objective" },
       token,
     );
+    const timeIncrement = calculateDays(data.range);
 
-    // Daily timeseries for this campaign. `status` is not a valid Ads Insights field;
-    // status/budget metadata comes from the campaign object above.
     const daily = await graphGet<{ data: any[] }>(
       `/${data.campaignId}/insights`,
       {
         time_range: timeRange,
-        time_increment: "1",
+        time_increment: timeIncrement,
         action_attribution_windows: attributionWindows,
         fields:
           "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,ctr,cpm,actions,action_values,objective,inline_link_clicks,inline_link_click_ctr",
@@ -95,7 +99,6 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       token,
     );
 
-    // Pick dominant conversion type from aggregated actions across the campaign
     const actionsAgg = new Map<string, number>();
     const valuesAgg = new Map<string, number>();
     let totSpend = 0,
@@ -127,7 +130,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     const revenue = valuesAgg.get(convType) ?? 0;
 
     const timeseries = daily.data
-      .map((row): import("./analytics-types.ts").TimeSeriesPoint => {
+      .map((row): import("../lib/analytics-types.ts").TimeSeriesPoint => {
         const spend = parseFloat(row.spend) || 0;
         const rev =
           ((row.action_values ?? []) as MetaAction[]).find((a) => a.action_type === convType)
@@ -162,8 +165,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
       inline_link_clicks: totInlineClicks,
     };
 
-    // Ads (creative-level)
-    const ads: import("./analytics-types.ts").AdRow[] = [];
+    const ads: AdRow[] = [];
     try {
       const adMetricsPromise = await graphGet<{ data: any[] }>(
         `/${data.campaignId}/insights`,
@@ -225,7 +227,7 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     // Breakdown helper
     const fetchBreakdown = async (
       breakdowns: string,
-    ): Promise<import("./analytics-types.ts").BreakdownRow[]> => {
+    ): Promise<import("../lib/analytics-types.ts").BreakdownRow[]> => {
       try {
         const r = await graphGet<{ data: any[] }>(
           `/${data.campaignId}/insights`,
@@ -266,19 +268,6 @@ export const fetchCampaignDetail = createServerFn({ method: "POST" })
     return { campaign, timeseries, ads, ageGender, device };
   });
 
-export type ConnectionCheck = {
-  ok: boolean;
-  label: string;
-  detail?: string;
-  error?: string;
-};
-export type ConnectionTest = {
-  tokenPresent: boolean;
-  paid: ConnectionCheck;
-  page: ConnectionCheck;
-  instagram: ConnectionCheck;
-};
-
 async function probe(
   label: string,
   fn: () => Promise<{ detail: string }>,
@@ -296,7 +285,7 @@ async function probe(
 }
 
 export const testMetaConnection = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .validator((d) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<ConnectionTest> => {
     const supabaseAuth = getSupabaseServerClient();
     const { data: cliente, error } = await supabaseAuth
@@ -306,6 +295,7 @@ export const testMetaConnection = createServerFn({ method: "POST" })
       )
       .eq("id", data.clientId)
       .single();
+
     if (error || !cliente) throw new Error("Cliente não encontrado");
 
     const client = cliente as ClientRow;

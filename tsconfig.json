@@ -5,7 +5,8 @@
     "vite.config.ts",
     "eslint.config.js",
     "src/integrations/supabase/client",
-    "src/lib/supabase"
+    "src/lib/supabase",
+    "src/serverFunctions/campaignGroup.server.ts"
   ],
   "compilerOptions": {
     "target": "ES2022",

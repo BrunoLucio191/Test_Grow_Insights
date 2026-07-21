@@ -5,7 +5,7 @@ export function EmptyDateState({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex min-h-[400px] flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/30 p-8 text-center backdrop-blur-sm animate-in fade-in duration-500",
+        "flex h-full flex-col items-center justify-center rounded-xl  p-8 text-center  animate-in fade-in duration-500",
         className,
       )}
     >

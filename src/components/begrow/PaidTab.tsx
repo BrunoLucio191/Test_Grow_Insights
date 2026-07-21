@@ -49,8 +49,8 @@ import {
   listCampaignGroups,
   upsertCampaignGroup,
   deleteCampaignGroup,
-} from "@/lib/campGroup.server";
-import { fetchMetaAdsData } from "../../lib/pago.server";
+} from "../../serverFunctions/campGroup.server";
+import { fetchMetaAdsData } from "../../serverFunctions/pago.server";
 import type {
   DateRange,
   Campaign,
@@ -248,10 +248,12 @@ export function PaidTab({
   const listGroupsFn = useServerFn(listCampaignGroups);
   const upsertGroupFn = useServerFn(upsertCampaignGroup);
   const deleteGroupFn = useServerFn(deleteCampaignGroup);
+  const hasValidRange = Boolean(range?.from && range?.to);
 
   const { data, isLoading } = useQuery({
     queryKey: ["paid", clientId, range.from, range.to, attribution],
     queryFn: () => fn({ data: { clientId, range, attribution } }),
+    enabled: hasValidRange,
   });
 
   const { data: groups } = useQuery({
@@ -428,12 +430,26 @@ export function PaidTab({
     }
   };
 
+  const prettyAttribution = (attribution: AttributionWindow) => {
+    switch (attribution) {
+      case "7d_click,1d_view":
+        return " 7 dias click, 1 dia view";
+      case "1d_click,1d_view":
+        return " 1 dia click, 1 dia view";
+      case "7d_click":
+        return " 7 dias click";
+      case "1d_click":
+        return " 1 dia click";
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 ">
         <div className="text-sm text-muted-foreground">
-          Atribuição: <span className="font-medium text-foreground">{attribution}</span>
+          Atribuição:
+          <span className="font-medium text-foreground">{prettyAttribution(attribution)}</span>
         </div>
         <div className="flex items-center gap-2">
           <Popover>
@@ -500,7 +516,6 @@ export function PaidTab({
         </div>
       </div>
 
-      {/* KPI cards */}
       {shownKpis.length > 0 && (
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
           {shownKpis.map((k) => (
@@ -509,61 +524,74 @@ export function PaidTab({
         </div>
       )}
 
-      {/* Chart */}
       <Card className="border-border/60 bg-card/60 p-6">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-semibold">Investimento, Receita e ROAS</h3>
+            <h3 className="text-lg font-semibold">Investimento, Receita e ROAS</h3>
             <p className="text-sm text-muted-foreground">Evolução diária no período</p>
           </div>
-          <div className="text-right text-xs text-muted-foreground">
+          <div className="text-right text-sm ">
             <div className="flex items-center justify-end gap-2">
-              <Percent className="h-3 w-3" />
+              <Percent className="h-2 w-3" />
               Taxa de conversão:{" "}
               <span className="font-semibold text-foreground">{pct(data.kpis.conversionRate)}</span>
             </div>
           </div>
         </div>
-        <div className="h-72 bg-card" ref={chartRef}>
+        <div className="h-80 mb-4" ref={chartRef}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data.timeseries} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-              <XAxis dataKey="date" stroke="#a1a1aa" fontSize={11} />
-              <YAxis yAxisId="left" stroke="#60a5fa" fontSize={11} />
-              <YAxis yAxisId="right" orientation="right" stroke="#34d399" fontSize={11} />
+            <LineChart
+              data={data.timeseries}
+              margin={{ top: 7, right: 10, left: -10, bottom: -30 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+
+              <XAxis dataKey="date" stroke="var(--color-muted-foreground)" fontSize={16} />
+              <YAxis yAxisId="left" stroke="var(--color-muted-foreground)" fontSize={17} />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                stroke="var(--color-muted-foreground)"
+                fontSize={17}
+              />
+
               <Tooltip
                 contentStyle={{
-                  background: "#1f2937",
-                  border: "1px solid #374151",
+                  background: "var(--color-card)",
+                  border: "1px solid var(--color-border)",
                   borderRadius: "8px",
-                  color: "#fff",
+                  color: "var(--color-foreground)",
                 }}
+                itemStyle={{ color: "var(--color-foreground)" }}
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 17, color: "var(--color-foreground)" }} />
+
               <Line
                 yAxisId="left"
                 type="monotone"
                 dataKey="spend"
                 name="Investido (R$)"
-                stroke="#60a5fa"
+                stroke="var(--color-chart-4)"
                 strokeWidth={2.5}
                 dot={false}
               />
+
               <Line
                 yAxisId="left"
                 type="monotone"
                 dataKey="revenue"
                 name="Receita (R$)"
-                stroke="#a78bfa"
+                stroke="var(--color-chart-1)"
                 strokeWidth={2.5}
                 dot={false}
               />
+
               <Line
                 yAxisId="right"
                 type="monotone"
                 dataKey="roas"
                 name="ROAS (x)"
-                stroke="#34d399"
+                stroke="var(--color-chart-3)"
                 strokeWidth={2.5}
                 dot={false}
               />
@@ -616,7 +644,7 @@ export function PaidTab({
                 {shownCols.map((c) => (
                   <th
                     key={c.key}
-                    className={`px-4 py-3  font-medium ${c.align === "right" ? "text-right" : ""}`}
+                    className={`px-4 py-4  font-medium ${c.align === "right" ? "text-right" : ""}`}
                   >
                     {c.label}
                   </th>
@@ -636,7 +664,7 @@ export function PaidTab({
                       className="cursor-pointer border-b border-border/40 transition-colors hover:bg-muted/30"
                       onClick={() => !isGroup && setSelected(entry.row)}
                     >
-                      <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="pl-8 px-2 py-3" onClick={(e) => e.stopPropagation()}>
                         {isGroup ? (
                           <button
                             onClick={() => {
